@@ -24,6 +24,17 @@
   let observer = null;
   let activeSelectors = null;
 
+  // The extension only has work to do on the bare PR conversation page
+  // (`/owner/repo/pull/123`). Files Changed, Commits, and Checks tabs all
+  // append a sub-path — `/files`, `/commits`, `/checks` — that we want to
+  // ignore. The match pattern in manifest.json is broader so the script
+  // stays loaded across soft-nav between these tabs; this regex is the
+  // runtime gate that decides whether to act.
+  const CONVERSATION_PATH_RE = /^\/[^/]+\/[^/]+\/pull\/\d+\/?$/;
+  function onConversationPage() {
+    return CONVERSATION_PATH_RE.test(location.pathname);
+  }
+
   function findContainer() {
     for (const pair of SELECTOR_CANDIDATES) {
       const el = document.querySelector(pair.container);
@@ -211,10 +222,18 @@
     rebindScheduled = true;
     queueMicrotask(() => {
       rebindScheduled = false;
-      const onPrPage = /^\/[^/]+\/[^/]+\/pull\/\d+/.test(location.pathname);
+
+      // Off the Conversation tab — tear down any UI we put up and stop here.
+      if (!onConversationPage()) {
+        const btn = document.getElementById(BUTTON_ID);
+        if (btn) btn.remove();
+        if (observer) { observer.disconnect(); observer = null; }
+        activeSelectors = null;
+        return;
+      }
 
       // Re-inject the button if navigation stripped it.
-      if (onPrPage && !document.getElementById(BUTTON_ID)) {
+      if (!document.getElementById(BUTTON_ID)) {
         injectToggleButton();
       }
 
@@ -249,8 +268,12 @@
     }
     LOG("initial order:", currentOrder);
 
-    injectToggleButton();
+    // Always start the body watcher so we react to soft-nav into the
+    // Conversation tab, but only inject the button if we're already there.
     startBodyWatcher();
+    if (onConversationPage()) {
+      injectToggleButton();
+    }
     scheduleRebindIfNeeded();
   }
 

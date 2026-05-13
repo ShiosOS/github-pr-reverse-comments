@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GitHub PR Reverse Comments",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Sort GitHub PR conversation comments in reverse chronological order (newest first), with a toggle.",
   "permissions": ["storage"],
   "icons": {

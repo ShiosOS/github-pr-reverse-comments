@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GitHub PR Reverse Comments",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Sort GitHub PR conversation comments in reverse chronological order (newest first), with a toggle.",
   "permissions": ["storage"],
   "host_permissions": ["https://github.com/*"],
@@ -19,7 +19,8 @@
     "default_popup": "popup.html"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
   },
   "content_scripts": [
     {

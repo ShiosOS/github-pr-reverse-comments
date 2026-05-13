@@ -207,10 +207,23 @@
     setTimeout(() => bootObs.disconnect(), timeoutMs);
   }
 
+  // One-shot migration: reset any pre-existing preference so the new
+  // default (newest-first) takes effect for users who toggled to "oldest"
+  // during earlier testing. Bumping the version invalidates again.
+  const RESET_VERSION_KEY = "prrcDefaultResetVersion";
+  const CURRENT_RESET_VERSION = 1;
+
   async function init() {
     LOG("content script loaded on", location.href);
-    const stored = await chrome.storage.local.get(STORAGE_KEY);
-    currentOrder = stored[STORAGE_KEY] || "newest";
+    const stored = await chrome.storage.local.get([STORAGE_KEY, RESET_VERSION_KEY]);
+    if (stored[RESET_VERSION_KEY] !== CURRENT_RESET_VERSION) {
+      await chrome.storage.local.remove(STORAGE_KEY);
+      await chrome.storage.local.set({ [RESET_VERSION_KEY]: CURRENT_RESET_VERSION });
+      currentOrder = "newest";
+      LOG("applied default reset to newest");
+    } else {
+      currentOrder = stored[STORAGE_KEY] || "newest";
+    }
     LOG("initial order:", currentOrder);
 
     // Inject the button immediately so the user can see the extension is alive,

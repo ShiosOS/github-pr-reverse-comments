@@ -1,7 +1,8 @@
 # GitHub PR Reverse Comments
 
-A small Chrome (Manifest V3) extension that flips the order of comments on a
-GitHub Pull Request conversation page so the newest comments appear first.
+A small Manifest V3 extension for **Chrome** and **Firefox** that flips the
+order of comments on a GitHub Pull Request conversation page so the newest
+comments appear first.
 
 ## Features
 
@@ -16,17 +17,32 @@ GitHub Pull Request conversation page so the newest comments appear first.
 
 ## Install as an unpacked extension
 
-1. Clone or download this repository to a folder on disk.
-2. Open Chrome and navigate to `chrome://extensions`.
-3. Toggle **Developer mode** on (top-right).
-4. Click **Load unpacked** and select the `github-pr-reverse-comments` folder.
-5. Open any GitHub Pull Request — the conversation will reload with the newest
-   comment at the top, and a floating **↓ Newest first** button will appear in
-   the bottom-right corner. Click it to flip the order.
+Clone or download this repository to a folder on disk first, then follow the
+instructions for your browser.
 
-> Note: The manifest references `icon.png`. If you don't ship an icon, either
-> add a 128×128 PNG named `icon.png` next to `manifest.json` or remove the
-> `icons` block from `manifest.json` before loading.
+### Chrome / Edge / Brave (any Chromium)
+
+1. Open `chrome://extensions` (or `edge://extensions`).
+2. Toggle **Developer mode** on (top-right).
+3. Click **Load unpacked** and select the `github-pr-reverse-comments` folder.
+
+### Firefox
+
+Firefox only loads unsigned extensions **temporarily** — they vanish on the
+next browser restart. To install permanently, the extension has to be signed
+through [addons.mozilla.org](https://addons.mozilla.org) (or you run Firefox
+Developer Edition / Nightly with `xpinstall.signatures.required` set to
+`false` in `about:config`).
+
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on…**.
+3. Select the `manifest.json` file inside the `github-pr-reverse-comments` folder.
+
+### Confirm it works
+
+Open any GitHub Pull Request — the conversation will reload with the newest
+comment at the top, and a floating **↓ Newest first** button will appear in
+the bottom-right corner. Click it to flip the order.
 
 ## Files
 

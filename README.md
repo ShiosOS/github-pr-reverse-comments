@@ -1,66 +1,122 @@
 # GitHub PR Reverse Comments
 
-A small Manifest V3 extension for **Chrome** and **Firefox** that flips the
-order of comments on a GitHub Pull Request conversation page so the newest
-comments appear first.
+Read GitHub Pull Request conversations **newest comment first**.
 
-## Features
+GitHub shows PR comments oldest-first, so on long-running PRs you have to
+scroll to the bottom every time you open the page just to see what's new.
+This extension flips the order. The PR description still sits at the top
+where you'd expect it; only the conversation timeline gets reversed.
 
-- Reverses the children of `.js-discussion` on any `https://github.com/*/*/pull/*` page.
-- Re-applies the order when GitHub lazily loads more comments, using a
-  `MutationObserver` with a re-entrancy flag so it never loops on its own writes.
-- Floating toggle button in the bottom-right of the page to flip between
-  **Newest first** and **Oldest first**.
-- Preference is persisted in `chrome.storage.local`, so it survives reloads and
-  syncs between the content script and the popup.
-- Optional toolbar popup for switching the order without opening a PR.
+A small button in the bottom-right of every PR page lets you flip between
+**Newest first** and **Oldest first**. Your choice is remembered across
+page loads.
 
-## Install as an unpacked extension
+![Toggle button in bottom-right](https://placehold.co/600x40/1f6feb/ffffff?text=%E2%86%93+Newest+first)
 
-Clone or download this repository to a folder on disk first, then follow the
-instructions for your browser.
+Works in **Chrome**, **Edge**, **Brave**, any other Chromium browser, and
+**Firefox 142+**.
 
-### Chrome / Edge / Brave (any Chromium)
+---
 
-1. Open `chrome://extensions` (or `edge://extensions`).
-2. Toggle **Developer mode** on (top-right).
-3. Click **Load unpacked** and select the `github-pr-reverse-comments` folder.
+## Install
+
+### Chrome / Edge / Brave (any Chromium browser)
+
+1. Download this repository — either `git clone` it or click the green
+   **Code** button on GitHub and **Download ZIP**, then unzip it somewhere
+   permanent (the browser keeps reading the files from disk).
+2. Open `chrome://extensions` (or `edge://extensions`, `brave://extensions`).
+3. Toggle **Developer mode** on in the top-right corner.
+4. Click **Load unpacked** and select the `github-pr-reverse-comments` folder.
+5. Open any GitHub Pull Request — you should see a blue **↓ Newest first**
+   button in the bottom-right corner, and the newest comment will be at the
+   top of the timeline.
 
 ### Firefox
 
-Firefox only loads unsigned extensions **temporarily** — they vanish on the
-next browser restart. To install permanently, the extension has to be signed
-through [addons.mozilla.org](https://addons.mozilla.org) (or you run Firefox
-Developer Edition / Nightly with `xpinstall.signatures.required` set to
-`false` in `about:config`).
+Firefox is stricter than Chrome about installing extensions from outside
+its official add-on store. You have two paths:
 
-1. Open `about:debugging#/runtime/this-firefox`.
+#### Quick: temporary install (resets when you quit Firefox)
+
+1. Go to `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on…**.
-3. Select the `manifest.json` file inside the `github-pr-reverse-comments` folder.
+3. Pick the `manifest.json` file inside the extension folder.
 
-### Confirm it works
+The extension works until you close Firefox.
 
-Open any GitHub Pull Request — the conversation will reload with the newest
-comment at the top, and a floating **↓ Newest first** button will appear in
-the bottom-right corner. Click it to flip the order.
+#### Permanent: install the signed `.xpi` from the Releases page
 
-## Files
+1. Go to the [Releases page](https://github.com/ShiosOS/github-pr-reverse-comments/releases).
+2. Download the `.xpi` file from the latest release.
+3. Drag the `.xpi` into a Firefox window — Firefox will prompt to install it
+   permanently.
 
-| File           | Purpose                                                |
-| -------------- | ------------------------------------------------------ |
-| `manifest.json`| Manifest V3 extension definition                       |
-| `content.js`   | Runs on PR pages; sorts comments and injects the toggle|
-| `popup.html`   | Toolbar popup UI                                       |
-| `popup.js`     | Popup behaviour; reads/writes `chrome.storage.local`   |
+> If no `.xpi` is attached yet, only the zip is available. The zip is for
+> Chrome's "Load unpacked" flow, not for Firefox.
 
-## How it works
+---
 
-The content script captures the original DOM position of every `.js-discussion`
-child the first time it sees it (stored on a `data-prrc-index` attribute), then
-sorts by that index in the requested direction. Because the original order is
-preserved on the element itself, repeated re-sorts after dynamic inserts are
-stable and idempotent.
+## How to use it
 
-To avoid infinite observer loops, the script sets an `isSorting` flag and
-disconnects the observer around its own DOM writes, reconnecting once they
-settle.
+Once it's installed, you don't have to do anything. Open any Pull Request
+on github.com and:
+
+- Newest comment is at the top of the conversation.
+- The PR description stays where it always was, above the timeline.
+- The **↓ Newest first** button in the bottom-right corner toggles the
+  order. Click it to switch to oldest-first; click again to switch back.
+- Your preference is saved automatically and applies to every PR you visit.
+
+That's it. No setup, no account, no options page to dig through.
+
+---
+
+## What it does (and doesn't) collect
+
+**Nothing leaves your browser.** The only thing the extension stores is a
+single preference value — either `"newest"` or `"oldest"` — saved locally
+on your machine. There are no analytics, no network requests, no tracking.
+
+The full list of permissions:
+
+- **storage** — to remember whether you want newest-first or oldest-first.
+- **access to github.com pull request pages** — to read and re-order the
+  comments visible in the tab. It does not read any other tabs.
+
+---
+
+## Troubleshooting
+
+**The button doesn't appear.** Make sure you're on a Pull Request page
+(URL looks like `https://github.com/owner/repo/pull/123`). The extension
+only runs on PR pages, not on issues, code views, or the repo home.
+
+**The button appears but clicking it doesn't change anything.** Open the
+browser's developer console (F12 → Console) and look for messages starting
+with `[PRRC]`. If you see `no matching container/item selector found`,
+GitHub has shipped a new design variant the extension doesn't recognize
+yet — please [open an issue](https://github.com/ShiosOS/github-pr-reverse-comments/issues)
+and paste those console messages so it can be fixed.
+
+**I clicked the button and now I'm stuck on oldest-first.** Click it again
+to flip back, or open the extension's popup (toolbar icon) and pick
+**Newest first**.
+
+---
+
+## Building / contributing
+
+There is no build step. Every file in this repo is the same file the
+browser runs. To make a change, edit the source, reload the extension at
+`chrome://extensions` (or re-install the temporary add-on in Firefox), and
+refresh a PR page.
+
+| File           | Purpose                                                  |
+| -------------- | -------------------------------------------------------- |
+| `manifest.json`| Extension definition (Manifest V3, Chrome + Firefox)     |
+| `content.js`   | Runs on PR pages; reorders comments, draws the toggle    |
+| `popup.html`   | Toolbar popup UI                                         |
+| `popup.js`     | Popup behavior; reads/writes saved preference            |
+
+Pull requests welcome.

@@ -1,10 +1,13 @@
 // GitHub PR Reverse Comments — content script
-// Reverses children of `.js-discussion` based on a stored preference, and
-// re-applies the order whenever GitHub dynamically inserts new items.
+//
+// Reverses the order of `.js-timeline-item` elements inside `.js-discussion`,
+// while leaving non-timeline siblings (PR description, "review changes" form,
+// comment composer, etc.) in their original slots.
 
 (() => {
   const STORAGE_KEY = "prCommentOrder"; // "newest" | "oldest"
   const DISCUSSION_SELECTOR = ".js-discussion";
+  const ITEM_SELECTOR = ".js-timeline-item";
   const BUTTON_ID = "pr-reverse-comments-toggle";
 
   let currentOrder = "newest";
@@ -15,43 +18,65 @@
     return document.querySelector(DISCUSSION_SELECTOR);
   }
 
-  // Sort children of `.js-discussion` by their original document position.
-  // We stash the original index on a data attribute the first time we see a
-  // node so subsequent re-sorts are stable regardless of current DOM order.
+  // Sort only `.js-timeline-item` children by their original document position.
+  // Non-timeline siblings (the PR description, the comment box, etc.) keep
+  // their slots — we only rewrite the positions held by timeline items.
   function applyOrder(order) {
     const container = getDiscussion();
     if (!container) return;
 
+    const allChildren = Array.from(container.children);
+    const items = allChildren.filter((el) => el.matches(ITEM_SELECTOR));
+    if (items.length < 2) return;
+
     isSorting = true;
     try {
-      const children = Array.from(container.children);
-
+      // Stamp originals on first sight so repeated re-sorts are stable.
       let nextIndex = 0;
-      // Find the highest assigned index so newly-inserted nodes keep increasing.
-      for (const el of children) {
+      for (const el of items) {
         const idx = el.dataset.prrcIndex;
         if (idx !== undefined) {
           const n = parseInt(idx, 10);
           if (!Number.isNaN(n) && n >= nextIndex) nextIndex = n + 1;
         }
       }
-      for (const el of children) {
+      for (const el of items) {
         if (el.dataset.prrcIndex === undefined) {
           el.dataset.prrcIndex = String(nextIndex++);
         }
       }
 
-      children.sort((a, b) => {
+      // The DOM slots currently occupied by timeline items, in document order.
+      const slots = allChildren
+        .map((el, i) => (el.matches(ITEM_SELECTOR) ? i : -1))
+        .filter((i) => i !== -1);
+
+      // Items sorted by stored original index.
+      const sortedItems = [...items].sort((a, b) => {
         const ai = parseInt(a.dataset.prrcIndex, 10);
         const bi = parseInt(b.dataset.prrcIndex, 10);
         return order === "newest" ? bi - ai : ai - bi;
       });
 
-      // Re-append in the desired order. Appending a node already in the
-      // container just moves it, so this is cheap.
-      for (const el of children) container.appendChild(el);
+      // Place sortedItems[k] at slot k. We do this by rebuilding the child
+      // order array and re-appending in that order.
+      const newChildren = allChildren.slice();
+      slots.forEach((slotIdx, k) => {
+        newChildren[slotIdx] = sortedItems[k];
+      });
+
+      // Skip work if nothing actually moved.
+      let changed = false;
+      for (let i = 0; i < newChildren.length; i++) {
+        if (newChildren[i] !== allChildren[i]) { changed = true; break; }
+      }
+      if (!changed) {
+        isSorting = false;
+        return;
+      }
+
+      for (const el of newChildren) container.appendChild(el);
     } finally {
-      // Defer clearing the flag until after the observer fires for our writes.
       setTimeout(() => { isSorting = false; }, 0);
     }
   }
@@ -63,8 +88,6 @@
 
     observer = new MutationObserver((mutations) => {
       if (isSorting) return;
-      // Only re-sort if children were added/removed (not for attribute churn
-      // inside existing comments — GitHub does a lot of that).
       const structural = mutations.some(
         (m) => m.type === "childList" && (m.addedNodes.length || m.removedNodes.length)
       );
@@ -81,12 +104,9 @@
   function injectToggleButton() {
     if (document.getElementById(BUTTON_ID)) return;
 
-    // Anchor the button near the PR title actions if available, otherwise
-    // fall back to a fixed-position floating button.
     const btn = document.createElement("button");
     btn.id = BUTTON_ID;
     btn.type = "button";
-    btn.className = "btn btn-sm";
     btn.style.cssText = [
       "position: fixed",
       "bottom: 16px",
@@ -119,7 +139,6 @@
     btn.title = `Click to switch to ${currentOrder === "newest" ? "oldest" : "newest"} first`;
   }
 
-  // React to changes made from the popup.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !changes[STORAGE_KEY]) return;
     currentOrder = changes[STORAGE_KEY].newValue || "newest";
@@ -128,8 +147,6 @@
     applyOrder(currentOrder);
   });
 
-  // GitHub uses Turbo navigation — `.js-discussion` may not exist at
-  // `document_idle` on first paint. Wait for it to appear.
   function waitForDiscussion(callback) {
     if (getDiscussion()) { callback(); return; }
     const bootObs = new MutationObserver(() => {
@@ -139,7 +156,6 @@
       }
     });
     bootObs.observe(document.body, { childList: true, subtree: true });
-    // Safety timeout — stop watching after 30s to avoid leaks on non-PR pages.
     setTimeout(() => bootObs.disconnect(), 30000);
   }
 
@@ -156,9 +172,7 @@
 
   init();
 
-  // Handle Turbo navigation between PR pages without a full reload.
   document.addEventListener("turbo:render", () => {
-    // Re-inject and re-bind on the new page.
     waitForDiscussion(() => {
       applyOrder(currentOrder);
       injectToggleButton();

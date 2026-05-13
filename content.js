@@ -26,16 +26,15 @@
 
   function findContainer() {
     for (const pair of SELECTOR_CANDIDATES) {
-      const container = document.querySelector(pair.container);
-      if (!container) continue;
-      const items = container.querySelectorAll(`:scope > ${pair.item}`);
-      if (items.length >= 2) {
-        return { container, ...pair };
+      const el = document.querySelector(pair.container);
+      if (!el) continue;
+      const directItems = el.querySelectorAll(`:scope > ${pair.item}`);
+      if (directItems.length >= 2) {
+        return { el, item: pair.item, containerSel: pair.container, descendant: false };
       }
-      // Maybe the items aren't direct children — try descendant search.
-      const anyItems = container.querySelectorAll(pair.item);
+      const anyItems = el.querySelectorAll(pair.item);
       if (anyItems.length >= 2) {
-        return { container, ...pair, descendant: true };
+        return { el, item: pair.item, containerSel: pair.container, descendant: true };
       }
     }
     return null;
@@ -49,10 +48,15 @@
     }
     if (!activeSelectors) {
       activeSelectors = found;
-      LOG("using selectors", { container: found.container?.tagName + "." + found.container?.className?.toString().slice(0, 80), itemSel: found.item, descendant: !!found.descendant });
+      LOG("using selectors", {
+        containerSel: found.containerSel,
+        containerTag: found.el.tagName + (found.el.className ? "." + String(found.el.className).split(/\s+/).slice(0, 3).join(".") : ""),
+        itemSel: found.item,
+        descendant: found.descendant,
+      });
     }
 
-    const { container, item, descendant } = found;
+    const { el: container, item, descendant } = found;
 
     // Get the items and the parent that actually holds them as direct children.
     let itemParent = container;
@@ -126,8 +130,8 @@
     if (observer) observer.disconnect();
 
     const target = found.descendant
-      ? (found.container.querySelector(found.item)?.parentElement || found.container)
-      : found.container;
+      ? (found.el.querySelector(found.item)?.parentElement || found.el)
+      : found.el;
 
     observer = new MutationObserver((mutations) => {
       if (isSorting) return;

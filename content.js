@@ -1,37 +1,78 @@
 // GitHub PR Reverse Comments — content script
 //
-// Reverses the order of `.js-timeline-item` elements inside `.js-discussion`,
-// while leaving non-timeline siblings (PR description, "review changes" form,
-// comment composer, etc.) in their original slots.
+// Reverses the order of timeline items on a PR conversation page. GitHub
+// ships several variants of this page (classic Rails, partial React, full
+// React rollout), so we try a list of candidate container/item selector
+// pairs and use the first one that matches.
 
 (() => {
   const STORAGE_KEY = "prCommentOrder"; // "newest" | "oldest"
-  const DISCUSSION_SELECTOR = ".js-discussion";
-  const ITEM_SELECTOR = ".js-timeline-item";
   const BUTTON_ID = "pr-reverse-comments-toggle";
+  const LOG = (...args) => console.log("[PRRC]", ...args);
+
+  // Ordered list of (container, item) selector pairs to try. First match wins.
+  const SELECTOR_CANDIDATES = [
+    { container: ".js-discussion", item: ".js-timeline-item" },
+    { container: '[data-testid="issue-viewer-issue-container"]', item: '[data-testid^="issue-viewer-comment"]' },
+    { container: '[data-testid="pr-timeline"]', item: '[data-testid^="pr-timeline-item"]' },
+    // Fallback: any element that looks like a timeline list.
+    { container: ".pull-discussion-timeline", item: ".js-timeline-item" },
+  ];
 
   let currentOrder = "newest";
-  let isSorting = false; // re-entrancy guard so the observer doesn't see our own DOM writes
+  let isSorting = false;
   let observer = null;
+  let activeSelectors = null;
 
-  function getDiscussion() {
-    return document.querySelector(DISCUSSION_SELECTOR);
+  function findContainer() {
+    for (const pair of SELECTOR_CANDIDATES) {
+      const container = document.querySelector(pair.container);
+      if (!container) continue;
+      const items = container.querySelectorAll(`:scope > ${pair.item}`);
+      if (items.length >= 2) {
+        return { container, ...pair };
+      }
+      // Maybe the items aren't direct children — try descendant search.
+      const anyItems = container.querySelectorAll(pair.item);
+      if (anyItems.length >= 2) {
+        return { container, ...pair, descendant: true };
+      }
+    }
+    return null;
   }
 
-  // Sort only `.js-timeline-item` children by their original document position.
-  // Non-timeline siblings (the PR description, the comment box, etc.) keep
-  // their slots — we only rewrite the positions held by timeline items.
   function applyOrder(order) {
-    const container = getDiscussion();
-    if (!container) return;
+    const found = findContainer();
+    if (!found) {
+      LOG("no matching container/item selector found on this page");
+      return;
+    }
+    if (!activeSelectors) {
+      activeSelectors = found;
+      LOG("using selectors", { container: found.container?.tagName + "." + found.container?.className?.toString().slice(0, 80), itemSel: found.item, descendant: !!found.descendant });
+    }
 
-    const allChildren = Array.from(container.children);
-    const items = allChildren.filter((el) => el.matches(ITEM_SELECTOR));
-    if (items.length < 2) return;
+    const { container, item, descendant } = found;
+
+    // Get the items and the parent that actually holds them as direct children.
+    let itemParent = container;
+    let items;
+    if (descendant) {
+      const firstItem = container.querySelector(item);
+      itemParent = firstItem?.parentElement || container;
+      items = Array.from(itemParent.children).filter((el) => el.matches(item));
+    } else {
+      items = Array.from(container.children).filter((el) => el.matches(item));
+    }
+
+    if (items.length < 2) {
+      LOG("fewer than 2 items, nothing to sort", items.length);
+      return;
+    }
 
     isSorting = true;
     try {
-      // Stamp originals on first sight so repeated re-sorts are stable.
+      // Stamp original positions on first sight.
       let nextIndex = 0;
       for (const el of items) {
         const idx = el.dataset.prrcIndex;
@@ -46,45 +87,47 @@
         }
       }
 
-      // The DOM slots currently occupied by timeline items, in document order.
+      const allChildren = Array.from(itemParent.children);
       const slots = allChildren
-        .map((el, i) => (el.matches(ITEM_SELECTOR) ? i : -1))
+        .map((el, i) => (el.matches(item) ? i : -1))
         .filter((i) => i !== -1);
 
-      // Items sorted by stored original index.
       const sortedItems = [...items].sort((a, b) => {
         const ai = parseInt(a.dataset.prrcIndex, 10);
         const bi = parseInt(b.dataset.prrcIndex, 10);
         return order === "newest" ? bi - ai : ai - bi;
       });
 
-      // Place sortedItems[k] at slot k. We do this by rebuilding the child
-      // order array and re-appending in that order.
       const newChildren = allChildren.slice();
       slots.forEach((slotIdx, k) => {
         newChildren[slotIdx] = sortedItems[k];
       });
 
-      // Skip work if nothing actually moved.
       let changed = false;
       for (let i = 0; i < newChildren.length; i++) {
         if (newChildren[i] !== allChildren[i]) { changed = true; break; }
       }
       if (!changed) {
+        LOG("already in", order, "order, no DOM changes");
         isSorting = false;
         return;
       }
 
-      for (const el of newChildren) container.appendChild(el);
+      for (const el of newChildren) itemParent.appendChild(el);
+      LOG("re-ordered", items.length, "items as", order);
     } finally {
       setTimeout(() => { isSorting = false; }, 0);
     }
   }
 
   function startObserver() {
-    const container = getDiscussion();
-    if (!container) return;
+    const found = findContainer();
+    if (!found) return;
     if (observer) observer.disconnect();
+
+    const target = found.descendant
+      ? (found.container.querySelector(found.item)?.parentElement || found.container)
+      : found.container;
 
     observer = new MutationObserver((mutations) => {
       if (isSorting) return;
@@ -95,10 +138,10 @@
 
       observer.disconnect();
       applyOrder(currentOrder);
-      observer.observe(container, { childList: true });
+      observer.observe(target, { childList: true });
     });
 
-    observer.observe(container, { childList: true });
+    observer.observe(target, { childList: true });
   }
 
   function injectToggleButton() {
@@ -111,15 +154,15 @@
       "position: fixed",
       "bottom: 16px",
       "right: 16px",
-      "z-index: 9999",
-      "padding: 6px 12px",
+      "z-index: 2147483647",
+      "padding: 8px 14px",
       "background: #1f6feb",
       "color: #fff",
       "border: 1px solid rgba(255,255,255,0.1)",
       "border-radius: 6px",
       "font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       "cursor: pointer",
-      "box-shadow: 0 2px 6px rgba(0,0,0,0.2)"
+      "box-shadow: 0 2px 8px rgba(0,0,0,0.3)"
     ].join(";");
     updateButtonLabel(btn);
 
@@ -131,11 +174,11 @@
     });
 
     document.body.appendChild(btn);
+    LOG("toggle button injected");
   }
 
   function updateButtonLabel(btn) {
-    const label = currentOrder === "newest" ? "↓ Newest first" : "↑ Oldest first";
-    btn.textContent = label;
+    btn.textContent = currentOrder === "newest" ? "↓ Newest first" : "↑ Oldest first";
     btn.title = `Click to switch to ${currentOrder === "newest" ? "oldest" : "newest"} first`;
   }
 
@@ -147,25 +190,31 @@
     applyOrder(currentOrder);
   });
 
-  function waitForDiscussion(callback) {
-    if (getDiscussion()) { callback(); return; }
+  function waitForContainer(callback, timeoutMs = 30000) {
+    if (findContainer()) { callback(); return; }
+    LOG("waiting for timeline container to appear…");
     const bootObs = new MutationObserver(() => {
-      if (getDiscussion()) {
+      if (findContainer()) {
         bootObs.disconnect();
         callback();
       }
     });
     bootObs.observe(document.body, { childList: true, subtree: true });
-    setTimeout(() => bootObs.disconnect(), 30000);
+    setTimeout(() => bootObs.disconnect(), timeoutMs);
   }
 
   async function init() {
+    LOG("content script loaded on", location.href);
     const stored = await chrome.storage.local.get(STORAGE_KEY);
     currentOrder = stored[STORAGE_KEY] || "newest";
+    LOG("initial order:", currentOrder);
 
-    waitForDiscussion(() => {
+    // Inject the button immediately so the user can see the extension is alive,
+    // even before the timeline finishes rendering.
+    injectToggleButton();
+
+    waitForContainer(() => {
       applyOrder(currentOrder);
-      injectToggleButton();
       startObserver();
     });
   }
@@ -173,7 +222,9 @@
   init();
 
   document.addEventListener("turbo:render", () => {
-    waitForDiscussion(() => {
+    LOG("turbo:render — re-binding");
+    activeSelectors = null;
+    waitForContainer(() => {
       applyOrder(currentOrder);
       injectToggleButton();
       startObserver();

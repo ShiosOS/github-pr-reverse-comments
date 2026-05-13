@@ -194,24 +194,47 @@
     applyOrder(currentOrder);
   });
 
-  function waitForContainer(callback, timeoutMs = 30000) {
-    if (findContainer()) { callback(); return; }
-    LOG("waiting for timeline container to appear…");
-    const bootObs = new MutationObserver(() => {
-      if (findContainer()) {
-        bootObs.disconnect();
-        callback();
-      }
-    });
-    bootObs.observe(document.body, { childList: true, subtree: true });
-    setTimeout(() => bootObs.disconnect(), timeoutMs);
-  }
-
   // One-shot migration: reset any pre-existing preference so the new
   // default (newest-first) takes effect for users who toggled to "oldest"
   // during earlier testing. Bumping the version invalidates again.
   const RESET_VERSION_KEY = "prrcDefaultResetVersion";
   const CURRENT_RESET_VERSION = 1;
+
+  // Re-bind whenever the timeline container we were sorting gets replaced.
+  // GitHub uses soft navigation between PR tabs (Conversation / Commits /
+  // Files / Checks) that tears down and rebuilds .js-discussion without
+  // firing a reliable single event, so we keep a permanent body-level
+  // watcher that re-runs init when a fresh container appears.
+  let rebindScheduled = false;
+  function scheduleRebindIfNeeded() {
+    if (rebindScheduled) return;
+    rebindScheduled = true;
+    queueMicrotask(() => {
+      rebindScheduled = false;
+      const onPrPage = /^\/[^/]+\/[^/]+\/pull\/\d+/.test(location.pathname);
+
+      // Re-inject the button if navigation stripped it.
+      if (onPrPage && !document.getElementById(BUTTON_ID)) {
+        injectToggleButton();
+      }
+
+      const found = findContainer();
+      if (!found) return;
+
+      // Same element we already bound to? Nothing to do.
+      if (activeSelectors && activeSelectors.el === found.el) return;
+
+      LOG("fresh timeline container detected — re-binding");
+      activeSelectors = null;
+      applyOrder(currentOrder);
+      startObserver();
+    });
+  }
+
+  function startBodyWatcher() {
+    const bodyObs = new MutationObserver(scheduleRebindIfNeeded);
+    bodyObs.observe(document.body, { childList: true, subtree: true });
+  }
 
   async function init() {
     LOG("content script loaded on", location.href);
@@ -226,25 +249,21 @@
     }
     LOG("initial order:", currentOrder);
 
-    // Inject the button immediately so the user can see the extension is alive,
-    // even before the timeline finishes rendering.
     injectToggleButton();
-
-    waitForContainer(() => {
-      applyOrder(currentOrder);
-      startObserver();
-    });
+    startBodyWatcher();
+    scheduleRebindIfNeeded();
   }
 
   init();
 
-  document.addEventListener("turbo:render", () => {
-    LOG("turbo:render — re-binding");
-    activeSelectors = null;
-    waitForContainer(() => {
-      applyOrder(currentOrder);
-      injectToggleButton();
-      startObserver();
+  // Fast paths for the soft-nav events GitHub does fire — avoid waiting
+  // for the next DOM mutation tick. The body watcher above is the real
+  // safety net; these just shave latency when the events arrive.
+  ["turbo:render", "turbo:load", "pjax:end", "soft-nav:end"].forEach((evt) => {
+    document.addEventListener(evt, () => {
+      LOG(evt, "— scheduling rebind");
+      activeSelectors = null;
+      scheduleRebindIfNeeded();
     });
   });
 })();

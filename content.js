@@ -16,7 +16,6 @@
   const RESET_VERSION_KEY = "prrcDefaultResetVersion";
   const CURRENT_RESET_VERSION = 1;
   const BUTTON_ID = "pr-reverse-comments-toggle";
-  const LOG = (...args) => console.log("[PRRC]", ...args);
 
   // Per-page configuration. `getTargets()` returns an array of
   //   { el, item, containerSel }
@@ -221,22 +220,13 @@
     if (!cfg) return;
 
     const targets = cfg.getTargets();
-    if (!targets.length) {
-      LOG("no matching targets on", cfg.name, "page");
-      return;
-    }
+    if (!targets.length) return;
 
     activeTargets = targets;
 
     isSorting = true;
     try {
-      let totalChanged = 0;
-      for (const t of targets) {
-        if (applyOrderToTarget(t, order)) totalChanged++;
-      }
-      if (totalChanged) {
-        LOG(`re-ordered ${totalChanged}/${targets.length} target(s) on ${cfg.name} as ${order}`);
-      }
+      for (const t of targets) applyOrderToTarget(t, order);
     } finally {
       setTimeout(() => { isSorting = false; }, 0);
     }
@@ -302,7 +292,6 @@
     });
 
     document.body.appendChild(btn);
-    LOG("toggle button injected");
   }
 
   function updateButtonLabel(btn) {
@@ -354,7 +343,6 @@
 
       if (sameSet) return;
 
-      LOG("fresh container(s) detected on", cfg.name, "— re-binding");
       activeTargets = [];
       applyOrder(currentOrder);
       startObservers();
@@ -367,17 +355,14 @@
   }
 
   async function init() {
-    LOG("content script loaded on", location.href);
     const stored = await chrome.storage.local.get([STORAGE_KEY, RESET_VERSION_KEY]);
     if (stored[RESET_VERSION_KEY] !== CURRENT_RESET_VERSION) {
       await chrome.storage.local.remove(STORAGE_KEY);
       await chrome.storage.local.set({ [RESET_VERSION_KEY]: CURRENT_RESET_VERSION });
       currentOrder = "newest";
-      LOG("applied default reset to newest");
     } else {
       currentOrder = stored[STORAGE_KEY] || "newest";
     }
-    LOG("initial order:", currentOrder);
 
     startBodyWatcher();
     if (onSupportedPage()) {
@@ -393,7 +378,6 @@
   // safety net; these just shave latency when the events arrive.
   ["turbo:render", "turbo:load", "pjax:end", "soft-nav:end"].forEach((evt) => {
     document.addEventListener(evt, () => {
-      LOG(evt, "— scheduling rebind");
       activeTargets = [];
       scheduleRebindIfNeeded();
     });

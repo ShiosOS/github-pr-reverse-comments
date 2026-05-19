@@ -44,21 +44,29 @@
       getTargets: () => {
         const targets = [];
 
-        // 1) Reverse the date groups themselves so the most recent day
-        //    appears at the top of the page.
-        const groupContainerCandidates = [
+        // Modern React-rendered Commits page: one flat list, no date
+        // groupings. Try this first.
+        //   <div data-testid="commits-list">
+        //     <ol><li data-testid="commit-row-item">…</li>…</ol>
+        //   </div>
+        const flat = firstMatchingTarget([
+          { container: '[data-testid="commits-list"]', item: '[data-testid="commit-row-item"]' },
+        ]);
+        if (flat) {
+          targets.push(flat);
+          return targets;
+        }
+
+        // Legacy Rails-rendered Commits page: date groups wrapping
+        // per-day ordered lists. Reverse both levels so it feels
+        // properly newest-first end-to-end.
+        const groupTarget = firstMatchingTarget([
           { container: ".js-commits-list", item: ".js-commit-group" },
           { container: "#commits_bucket", item: ".js-commit-group" },
-          { container: '[data-testid="commits-page"]', item: '[data-testid^="commit-group"]' },
-        ];
-        const groupTarget = firstMatchingTarget(groupContainerCandidates);
+        ]);
         if (groupTarget) targets.push(groupTarget);
 
-        // 2) Within every date group, reverse the individual <li>
-        //    commits so the latest commit of the day appears at the
-        //    top of its group.
-        const groups = document.querySelectorAll(".js-commit-group");
-        for (const group of groups) {
+        for (const group of document.querySelectorAll(".js-commit-group")) {
           const ol = group.querySelector("ol");
           if (ol && ol.querySelectorAll(":scope > li").length >= 2) {
             targets.push({

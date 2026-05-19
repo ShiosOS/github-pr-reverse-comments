@@ -11,16 +11,19 @@
 const ACTIVE_PATH = { 16: "icon-16.png", 48: "icon-48.png" };
 const DISABLED_PATH = { 16: "icon-16-disabled.png", 48: "icon-48-disabled.png" };
 
-// Matches the bare Conversation page only: /owner/repo/pull/N (optional trailing slash).
-// Files Changed, Commits, Checks, and Files diff anchors all append a path segment.
-const CONVERSATION_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+\/?(?:[?#].*)?$/;
+// Matches any PR page the extension is active on:
+//   /owner/repo/pull/N            (Conversation)
+//   /owner/repo/pull/N/commits    (Commits)
+// All other sub-paths (/files, /checks, deep diff anchors) leave the
+// toolbar icon in the disabled state.
+const ACTIVE_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+(?:\/commits)?\/?(?:[?#].*)?$/;
 
-function isConversationUrl(url) {
-  return typeof url === "string" && CONVERSATION_URL_RE.test(url);
+function isActiveUrl(url) {
+  return typeof url === "string" && ACTIVE_URL_RE.test(url);
 }
 
 function setIconForTab(tabId, url) {
-  const path = isConversationUrl(url) ? ACTIVE_PATH : DISABLED_PATH;
+  const path = isActiveUrl(url) ? ACTIVE_PATH : DISABLED_PATH;
   chrome.action.setIcon({ tabId, path }).catch(() => {
     // Tab may have been closed between the event and our call; ignore.
   });

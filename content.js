@@ -1,162 +1,224 @@
 // GitHub PR Reverse Comments — content script
 //
-// Reverses the order of timeline items on a PR conversation page. GitHub
-// ships several variants of this page (classic Rails, partial React, full
-// React rollout), so we try a list of candidate container/item selector
-// pairs and use the first one that matches.
+// Reverses chronological lists on GitHub PR pages so the newest entry
+// appears first. Currently supports:
+//
+//   /owner/repo/pull/N            (Conversation)  — reverse .js-timeline-item
+//   /owner/repo/pull/N/commits    (Commits)       — reverse .js-commit-group
+//                                                   AND reverse <li> commits
+//                                                   within each group
+//
+// The same toggle preference (newest vs oldest) drives every supported
+// page. Non-supported PR sub-tabs (Files Changed, Checks) are ignored.
 
 (() => {
   const STORAGE_KEY = "prCommentOrder"; // "newest" | "oldest"
+  const RESET_VERSION_KEY = "prrcDefaultResetVersion";
+  const CURRENT_RESET_VERSION = 1;
   const BUTTON_ID = "pr-reverse-comments-toggle";
   const LOG = (...args) => console.log("[PRRC]", ...args);
 
-  // Ordered list of (container, item) selector pairs to try. First match wins.
-  const SELECTOR_CANDIDATES = [
-    { container: ".js-discussion", item: ".js-timeline-item" },
-    { container: '[data-testid="issue-viewer-issue-container"]', item: '[data-testid^="issue-viewer-comment"]' },
-    { container: '[data-testid="pr-timeline"]', item: '[data-testid^="pr-timeline-item"]' },
-    // Fallback: any element that looks like a timeline list.
-    { container: ".pull-discussion-timeline", item: ".js-timeline-item" },
+  // Per-page configuration. `getTargets()` returns an array of
+  //   { el, item, containerSel }
+  // — one entry per DOM region that should be reversed. Conversation has
+  // exactly one (the timeline); Commits has many (the list of date
+  // groups, plus the inner <ol> of every individual date group).
+  const PAGE_CONFIGS = [
+    {
+      name: "conversation",
+      pathRe: /^\/[^/]+\/[^/]+\/pull\/\d+\/?$/,
+      getTargets: () => {
+        const candidates = [
+          { container: ".js-discussion", item: ".js-timeline-item" },
+          { container: '[data-testid="issue-viewer-issue-container"]', item: '[data-testid^="issue-viewer-comment"]' },
+          { container: '[data-testid="pr-timeline"]', item: '[data-testid^="pr-timeline-item"]' },
+          { container: ".pull-discussion-timeline", item: ".js-timeline-item" },
+        ];
+        const t = firstMatchingTarget(candidates);
+        return t ? [t] : [];
+      },
+    },
+    {
+      name: "commits",
+      pathRe: /^\/[^/]+\/[^/]+\/pull\/\d+\/commits\/?$/,
+      getTargets: () => {
+        const targets = [];
+
+        // 1) Reverse the date groups themselves so the most recent day
+        //    appears at the top of the page.
+        const groupContainerCandidates = [
+          { container: ".js-commits-list", item: ".js-commit-group" },
+          { container: "#commits_bucket", item: ".js-commit-group" },
+          { container: '[data-testid="commits-page"]', item: '[data-testid^="commit-group"]' },
+        ];
+        const groupTarget = firstMatchingTarget(groupContainerCandidates);
+        if (groupTarget) targets.push(groupTarget);
+
+        // 2) Within every date group, reverse the individual <li>
+        //    commits so the latest commit of the day appears at the
+        //    top of its group.
+        const groups = document.querySelectorAll(".js-commit-group");
+        for (const group of groups) {
+          const ol = group.querySelector("ol");
+          if (ol && ol.querySelectorAll(":scope > li").length >= 2) {
+            targets.push({
+              el: ol,
+              item: ":scope > li",
+              containerSel: ".js-commit-group ol",
+              descendant: false,
+            });
+          }
+        }
+
+        return targets;
+      },
+    },
   ];
 
   let currentOrder = "newest";
   let isSorting = false;
-  let observer = null;
-  let activeSelectors = null;
+  let observers = [];
+  let activeTargets = []; // [{ el, item, ... }]
 
-  // The extension only has work to do on the bare PR conversation page
-  // (`/owner/repo/pull/123`). Files Changed, Commits, and Checks tabs all
-  // append a sub-path — `/files`, `/commits`, `/checks` — that we want to
-  // ignore. The match pattern in manifest.json is broader so the script
-  // stays loaded across soft-nav between these tabs; this regex is the
-  // runtime gate that decides whether to act.
-  const CONVERSATION_PATH_RE = /^\/[^/]+\/[^/]+\/pull\/\d+\/?$/;
-  function onConversationPage() {
-    return CONVERSATION_PATH_RE.test(location.pathname);
-  }
-
-  function findContainer() {
-    for (const pair of SELECTOR_CANDIDATES) {
+  // Try (container, item) pairs in order. For each, prefer items as
+  // direct children of the container; fall back to descendant items if
+  // the container has at least 2 matching descendants. Returns the first
+  // pair that finds 2+ items, or null.
+  function firstMatchingTarget(candidates) {
+    for (const pair of candidates) {
       const el = document.querySelector(pair.container);
       if (!el) continue;
-      const directItems = el.querySelectorAll(`:scope > ${pair.item}`);
-      if (directItems.length >= 2) {
+      const direct = el.querySelectorAll(`:scope > ${pair.item}`);
+      if (direct.length >= 2) {
         return { el, item: pair.item, containerSel: pair.container, descendant: false };
       }
-      const anyItems = el.querySelectorAll(pair.item);
-      if (anyItems.length >= 2) {
+      const any = el.querySelectorAll(pair.item);
+      if (any.length >= 2) {
         return { el, item: pair.item, containerSel: pair.container, descendant: true };
       }
     }
     return null;
   }
 
-  function applyOrder(order) {
-    const found = findContainer();
-    if (!found) {
-      LOG("no matching container/item selector found on this page");
-      return;
-    }
-    if (!activeSelectors) {
-      activeSelectors = found;
-      LOG("using selectors", {
-        containerSel: found.containerSel,
-        containerTag: found.el.tagName + (found.el.className ? "." + String(found.el.className).split(/\s+/).slice(0, 3).join(".") : ""),
-        itemSel: found.item,
-        descendant: found.descendant,
-      });
-    }
+  function getCurrentPageConfig() {
+    const path = location.pathname;
+    return PAGE_CONFIGS.find((c) => c.pathRe.test(path)) || null;
+  }
 
-    const { el: container, item, descendant } = found;
+  function onSupportedPage() {
+    return getCurrentPageConfig() !== null;
+  }
 
-    // Get the items and the parent that actually holds them as direct children.
+  // Reverse one specific target's items in place. Preserves the slots
+  // of any non-matching siblings.
+  function applyOrderToTarget(target, order) {
+    const { el: container, item, descendant } = target;
+
     let itemParent = container;
     let items;
     if (descendant) {
       const firstItem = container.querySelector(item);
       itemParent = firstItem?.parentElement || container;
-      items = Array.from(itemParent.children).filter((el) => el.matches(item));
+      items = Array.from(itemParent.children).filter((c) => c.matches(item));
     } else {
-      items = Array.from(container.children).filter((el) => el.matches(item));
+      items = Array.from(container.children).filter((c) => c.matches(item));
     }
 
-    if (items.length < 2) {
-      LOG("fewer than 2 items, nothing to sort", items.length);
+    if (items.length < 2) return false;
+
+    // Stamp original positions on first sight.
+    let nextIndex = 0;
+    for (const it of items) {
+      const idx = it.dataset.prrcIndex;
+      if (idx !== undefined) {
+        const n = parseInt(idx, 10);
+        if (!Number.isNaN(n) && n >= nextIndex) nextIndex = n + 1;
+      }
+    }
+    for (const it of items) {
+      if (it.dataset.prrcIndex === undefined) {
+        it.dataset.prrcIndex = String(nextIndex++);
+      }
+    }
+
+    const allChildren = Array.from(itemParent.children);
+    const slots = allChildren
+      .map((c, i) => (c.matches(item) ? i : -1))
+      .filter((i) => i !== -1);
+
+    const sortedItems = [...items].sort((a, b) => {
+      const ai = parseInt(a.dataset.prrcIndex, 10);
+      const bi = parseInt(b.dataset.prrcIndex, 10);
+      return order === "newest" ? bi - ai : ai - bi;
+    });
+
+    const newChildren = allChildren.slice();
+    slots.forEach((slotIdx, k) => { newChildren[slotIdx] = sortedItems[k]; });
+
+    let changed = false;
+    for (let i = 0; i < newChildren.length; i++) {
+      if (newChildren[i] !== allChildren[i]) { changed = true; break; }
+    }
+    if (!changed) return false;
+
+    for (const c of newChildren) itemParent.appendChild(c);
+    return true;
+  }
+
+  function applyOrder(order) {
+    const cfg = getCurrentPageConfig();
+    if (!cfg) return;
+
+    const targets = cfg.getTargets();
+    if (!targets.length) {
+      LOG("no matching targets on", cfg.name, "page");
       return;
     }
 
+    activeTargets = targets;
+
     isSorting = true;
     try {
-      // Stamp original positions on first sight.
-      let nextIndex = 0;
-      for (const el of items) {
-        const idx = el.dataset.prrcIndex;
-        if (idx !== undefined) {
-          const n = parseInt(idx, 10);
-          if (!Number.isNaN(n) && n >= nextIndex) nextIndex = n + 1;
-        }
+      let totalChanged = 0;
+      for (const t of targets) {
+        if (applyOrderToTarget(t, order)) totalChanged++;
       }
-      for (const el of items) {
-        if (el.dataset.prrcIndex === undefined) {
-          el.dataset.prrcIndex = String(nextIndex++);
-        }
+      if (totalChanged) {
+        LOG(`re-ordered ${totalChanged}/${targets.length} target(s) on ${cfg.name} as ${order}`);
       }
-
-      const allChildren = Array.from(itemParent.children);
-      const slots = allChildren
-        .map((el, i) => (el.matches(item) ? i : -1))
-        .filter((i) => i !== -1);
-
-      const sortedItems = [...items].sort((a, b) => {
-        const ai = parseInt(a.dataset.prrcIndex, 10);
-        const bi = parseInt(b.dataset.prrcIndex, 10);
-        return order === "newest" ? bi - ai : ai - bi;
-      });
-
-      const newChildren = allChildren.slice();
-      slots.forEach((slotIdx, k) => {
-        newChildren[slotIdx] = sortedItems[k];
-      });
-
-      let changed = false;
-      for (let i = 0; i < newChildren.length; i++) {
-        if (newChildren[i] !== allChildren[i]) { changed = true; break; }
-      }
-      if (!changed) {
-        LOG("already in", order, "order, no DOM changes");
-        isSorting = false;
-        return;
-      }
-
-      for (const el of newChildren) itemParent.appendChild(el);
-      LOG("re-ordered", items.length, "items as", order);
     } finally {
       setTimeout(() => { isSorting = false; }, 0);
     }
   }
 
-  function startObserver() {
-    const found = findContainer();
-    if (!found) return;
-    if (observer) observer.disconnect();
+  function disconnectObservers() {
+    for (const o of observers) o.disconnect();
+    observers = [];
+  }
 
-    const target = found.descendant
-      ? (found.el.querySelector(found.item)?.parentElement || found.el)
-      : found.el;
+  function startObservers() {
+    disconnectObservers();
+    if (!activeTargets.length) return;
 
-    observer = new MutationObserver((mutations) => {
-      if (isSorting) return;
-      const structural = mutations.some(
-        (m) => m.type === "childList" && (m.addedNodes.length || m.removedNodes.length)
-      );
-      if (!structural) return;
+    for (const target of activeTargets) {
+      const watch = target.descendant
+        ? (target.el.querySelector(target.item)?.parentElement || target.el)
+        : target.el;
 
-      observer.disconnect();
-      applyOrder(currentOrder);
-      observer.observe(target, { childList: true });
-    });
+      const obs = new MutationObserver((mutations) => {
+        if (isSorting) return;
+        const structural = mutations.some(
+          (m) => m.type === "childList" && (m.addedNodes.length || m.removedNodes.length)
+        );
+        if (!structural) return;
 
-    observer.observe(target, { childList: true });
+        disconnectObservers();
+        applyOrder(currentOrder);
+        startObservers();
+      });
+      obs.observe(watch, { childList: true });
+      observers.push(obs);
+    }
   }
 
   function injectToggleButton() {
@@ -205,17 +267,9 @@
     applyOrder(currentOrder);
   });
 
-  // One-shot migration: reset any pre-existing preference so the new
-  // default (newest-first) takes effect for users who toggled to "oldest"
-  // during earlier testing. Bumping the version invalidates again.
-  const RESET_VERSION_KEY = "prrcDefaultResetVersion";
-  const CURRENT_RESET_VERSION = 1;
-
-  // Re-bind whenever the timeline container we were sorting gets replaced.
-  // GitHub uses soft navigation between PR tabs (Conversation / Commits /
-  // Files / Checks) that tears down and rebuilds .js-discussion without
-  // firing a reliable single event, so we keep a permanent body-level
-  // watcher that re-runs init when a fresh container appears.
+  // React to GitHub's soft-navigation by re-applying our work when a
+  // fresh target container appears (the old element gets detached and
+  // the new one isn't sorted yet).
   let rebindScheduled = false;
   function scheduleRebindIfNeeded() {
     if (rebindScheduled) return;
@@ -223,30 +277,36 @@
     queueMicrotask(() => {
       rebindScheduled = false;
 
-      // Off the Conversation tab — tear down any UI we put up and stop here.
-      if (!onConversationPage()) {
+      // Off a supported page — tear down everything we put up.
+      if (!onSupportedPage()) {
         const btn = document.getElementById(BUTTON_ID);
         if (btn) btn.remove();
-        if (observer) { observer.disconnect(); observer = null; }
-        activeSelectors = null;
+        disconnectObservers();
+        activeTargets = [];
         return;
       }
 
-      // Re-inject the button if navigation stripped it.
       if (!document.getElementById(BUTTON_ID)) {
         injectToggleButton();
       }
 
-      const found = findContainer();
-      if (!found) return;
+      const cfg = getCurrentPageConfig();
+      const freshTargets = cfg.getTargets();
+      if (!freshTargets.length) return;
 
-      // Same element we already bound to? Nothing to do.
-      if (activeSelectors && activeSelectors.el === found.el) return;
+      // Compare the new target set to the active one by element identity.
+      // If every element matches an active target's element, nothing to do.
+      const activeEls = new Set(activeTargets.map((t) => t.el));
+      const sameSet =
+        freshTargets.length === activeTargets.length &&
+        freshTargets.every((t) => activeEls.has(t.el));
 
-      LOG("fresh timeline container detected — re-binding");
-      activeSelectors = null;
+      if (sameSet) return;
+
+      LOG("fresh container(s) detected on", cfg.name, "— re-binding");
+      activeTargets = [];
       applyOrder(currentOrder);
-      startObserver();
+      startObservers();
     });
   }
 
@@ -268,10 +328,8 @@
     }
     LOG("initial order:", currentOrder);
 
-    // Always start the body watcher so we react to soft-nav into the
-    // Conversation tab, but only inject the button if we're already there.
     startBodyWatcher();
-    if (onConversationPage()) {
+    if (onSupportedPage()) {
       injectToggleButton();
     }
     scheduleRebindIfNeeded();
@@ -285,7 +343,7 @@
   ["turbo:render", "turbo:load", "pjax:end", "soft-nav:end"].forEach((evt) => {
     document.addEventListener(evt, () => {
       LOG(evt, "— scheduling rebind");
-      activeSelectors = null;
+      activeTargets = [];
       scheduleRebindIfNeeded();
     });
   });

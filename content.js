@@ -44,22 +44,65 @@
       getTargets: () => {
         const targets = [];
 
-        // Modern React-rendered Commits page: one flat list, no date
-        // groupings. Try this first.
+        // Modern React-rendered Commits page. Structure (May 2026):
         //   <div data-testid="commits-list">
-        //     <ol><li data-testid="commit-row-item">…</li>…</ol>
+        //     <div class="prc-Timeline-Timeline-...">              ← Timeline wrapper
+        //       <div class="… Timeline-Item …">                    ← day group N
+        //         <h3 data-testid="commit-group-title">Commits on …</h3>
+        //         <ul data-listview-component="items-list">
+        //           <li data-testid="commit-row-item">…</li>       ← commit within day
+        //           …
+        //         </ul>
+        //       </div>
+        //       <div class="… Timeline-Item …">…</div>             ← day group N+1
+        //       …
+        //     </div>
         //   </div>
-        const flat = firstMatchingTarget([
-          { container: '[data-testid="commits-list"]', item: '[data-testid="commit-row-item"]' },
-        ]);
-        if (flat) {
-          targets.push(flat);
-          return targets;
+        //
+        // To make "newest first" feel right we have to reverse two
+        // levels at once: the .Timeline-Item day groups (so the most
+        // recent day moves to the top), AND the <li> commits inside
+        // each day's <ul> (so within a day the latest commit is on
+        // top). Doing only one of them gives a confusing half-flipped
+        // result.
+        const commitsList = document.querySelector('[data-testid="commits-list"]');
+        if (commitsList) {
+          const dayGroups = commitsList.querySelectorAll(".Timeline-Item");
+
+          // 1) Reverse the day groups themselves (only meaningful if 2+).
+          if (dayGroups.length >= 2) {
+            const dayParent = dayGroups[0].parentElement;
+            if (dayParent) {
+              targets.push({
+                el: dayParent,
+                item: ".Timeline-Item",
+                containerSel: "[data-testid='commits-list'] .Timeline-Item parent",
+                descendant: false,
+              });
+            }
+          }
+
+          // 2) Reverse commits within each day's <ul>.
+          for (const group of dayGroups) {
+            const ul = group.querySelector('ul[data-listview-component="items-list"]');
+            if (
+              ul &&
+              ul.querySelectorAll(':scope > li[data-testid="commit-row-item"]').length >= 2
+            ) {
+              targets.push({
+                el: ul,
+                item: 'li[data-testid="commit-row-item"]',
+                containerSel: 'ul[data-listview-component="items-list"]',
+                descendant: false,
+              });
+            }
+          }
+
+          if (targets.length) return targets;
         }
 
-        // Legacy Rails-rendered Commits page: date groups wrapping
-        // per-day ordered lists. Reverse both levels so it feels
-        // properly newest-first end-to-end.
+        // Legacy Rails-rendered Commits page: .js-commit-group date
+        // groups wrapping per-day ordered lists.
         const groupTarget = firstMatchingTarget([
           { container: ".js-commits-list", item: ".js-commit-group" },
           { container: "#commits_bucket", item: ".js-commit-group" },

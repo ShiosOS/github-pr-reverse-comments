@@ -16,6 +16,7 @@
   const RESET_VERSION_KEY = "prrcDefaultResetVersion";
   const CURRENT_RESET_VERSION = 1;
   const BUTTON_ID = "pr-reverse-comments-toggle";
+  const AUTOTEST_STATUS_ID = "pr-reverse-comments-autotest-status";
 
   // Per-page configuration. `getTargets()` returns an array of
   //   { el, item, containerSel }
@@ -294,6 +295,95 @@
     document.body.appendChild(btn);
   }
 
+  function getAutotestTimelineItem() {
+    const candidates = [
+      '[data-testid="issue-viewer-issue-container"] [data-testid^="issue-viewer-comment"]',
+      '[data-testid="pr-timeline"] [data-testid^="pr-timeline-item"]',
+      ".js-discussion .js-timeline-item",
+      ".pull-discussion-timeline .js-timeline-item",
+    ];
+    for (const sel of candidates) {
+      for (const el of document.querySelectorAll(sel)) {
+        if ((el.textContent || "").toLowerCase().includes("autotest")) return el;
+      }
+    }
+    return null;
+  }
+
+  function getAutotestState(text) {
+    if (/(fail|error|timed out|cancelled|canceled)/i.test(text)) {
+      return { label: "✗ Autotest failing", color: "#da3633" };
+    }
+    if (/(pass|success|succeed)/i.test(text)) {
+      return { label: "✓ Autotest passing", color: "#238636" };
+    }
+    if (/(pending|in progress|queued|running)/i.test(text)) {
+      return { label: "• Autotest running", color: "#9a6700" };
+    }
+    return { label: "• Autotest status", color: "#1f6feb" };
+  }
+
+  function getAutotestInsertBeforeNode() {
+    const candidates = [
+      '[data-testid="issue-viewer-issue-container"] [data-testid="pr-timeline"]',
+      ".js-discussion",
+      ".pull-discussion-timeline",
+    ];
+    for (const sel of candidates) {
+      const el = document.querySelector(sel);
+      if (el && el.parentElement) return el;
+    }
+    return null;
+  }
+
+  function injectOrUpdateAutotestIndicator() {
+    const existing = document.getElementById(AUTOTEST_STATUS_ID);
+    const cfg = getCurrentPageConfig();
+    if (!cfg || cfg.name !== "conversation") {
+      if (existing) existing.remove();
+      return;
+    }
+
+    const target = getAutotestTimelineItem();
+    const insertBefore = getAutotestInsertBeforeNode();
+    if (!target || !insertBefore || !insertBefore.parentElement) {
+      if (existing) existing.remove();
+      return;
+    }
+
+    const state = getAutotestState(target.textContent || "");
+    const indicator = existing || document.createElement("button");
+    if (!existing) {
+      indicator.id = AUTOTEST_STATUS_ID;
+      indicator.type = "button";
+      indicator.style.cssText = [
+        "display: inline-block",
+        "margin: 8px 0 12px 0",
+        "padding: 6px 10px",
+        "background: var(--bgColor-muted, #f6f8fa)",
+        "border-radius: 6px",
+        "font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "cursor: pointer",
+      ].join(";");
+      indicator.addEventListener("click", () => {
+        const freshTarget = getAutotestTimelineItem();
+        if (!freshTarget) return;
+        freshTarget.scrollIntoView({ behavior: "smooth", block: "center" });
+        freshTarget.style.outline = "2px solid #1f6feb";
+        setTimeout(() => { freshTarget.style.outline = ""; }, 1200);
+      });
+    }
+
+    indicator.textContent = state.label;
+    indicator.title = "Click to jump to autotest status in the timeline";
+    indicator.style.border = `1px solid ${state.color}`;
+    indicator.style.color = state.color;
+
+    if (indicator !== insertBefore.previousElementSibling) {
+      insertBefore.parentElement.insertBefore(indicator, insertBefore);
+    }
+  }
+
   function updateButtonLabel(btn) {
     btn.textContent = currentOrder === "newest" ? "↓ Newest first" : "↑ Oldest first";
     btn.title = `Click to switch to ${currentOrder === "newest" ? "oldest" : "newest"} first`;
@@ -321,6 +411,8 @@
       if (!onSupportedPage()) {
         const btn = document.getElementById(BUTTON_ID);
         if (btn) btn.remove();
+        const autotest = document.getElementById(AUTOTEST_STATUS_ID);
+        if (autotest) autotest.remove();
         disconnectObservers();
         activeTargets = [];
         return;
@@ -329,6 +421,7 @@
       if (!document.getElementById(BUTTON_ID)) {
         injectToggleButton();
       }
+      injectOrUpdateAutotestIndicator();
 
       const cfg = getCurrentPageConfig();
       const freshTargets = cfg.getTargets();
@@ -367,6 +460,7 @@
     startBodyWatcher();
     if (onSupportedPage()) {
       injectToggleButton();
+      injectOrUpdateAutotestIndicator();
     }
     scheduleRebindIfNeeded();
   }

@@ -1,3 +1,4 @@
+// @ts-check
 // Shared constants for the extension.
 //
 // Loaded as a plain (non-module) script before content.js and popup.js.

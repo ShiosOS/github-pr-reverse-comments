@@ -1,3 +1,4 @@
+// @ts-check
 // GitHub PR Reverse Comments — content script
 //
 // Reverses chronological lists on GitHub PR pages so the newest entry
@@ -136,7 +137,9 @@
 
   let currentOrder = ORDER.NEWEST;
   let isSorting = false;
+  /** @type {MutationObserver[]} */
   let observers = [];
+  /** @type {PrrcTarget[]} */
   let activeTargets = []; // [{ el, item, ... }]
 
   function getCurrentPageConfig() {
@@ -148,6 +151,7 @@
     return getCurrentPageConfig() !== null;
   }
 
+  /** @param {string} order */
   function applyOrder(order) {
     const cfg = getCurrentPageConfig();
     if (!cfg) return;
@@ -246,7 +250,7 @@
   }
 
   function scrollToChecksBox() {
-    const box = findChecksBox();
+    const box = /** @type {HTMLElement | null} */ (findChecksBox());
     if (!box) return;
     box.scrollIntoView({ behavior: "smooth", block: "center" });
     box.style.outline = "2px solid #1f6feb";
@@ -271,7 +275,9 @@
     }
 
     const state = deriveChecksState(getCheckLabels());
-    const indicator = existing || document.createElement("button");
+    const indicator = /** @type {HTMLButtonElement} */ (
+      existing || document.createElement("button")
+    );
     if (!existing) {
       indicator.id = CHECKS_STATUS_ID;
       indicator.type = "button";
@@ -303,6 +309,7 @@
     }
   }
 
+  /** @param {HTMLElement} btn */
   function updateButtonLabel(btn) {
     btn.textContent = currentOrder === ORDER.NEWEST ? "↓ Newest first" : "↑ Oldest first";
     btn.title = `Click to switch to ${currentOrder === ORDER.NEWEST ? ORDER.OLDEST : ORDER.NEWEST} first`;
@@ -310,7 +317,7 @@
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !changes[STORAGE_KEY]) return;
-    currentOrder = changes[STORAGE_KEY].newValue || ORDER.NEWEST;
+    currentOrder = /** @type {string} */ (changes[STORAGE_KEY].newValue || ORDER.NEWEST);
     const btn = document.getElementById(BUTTON_ID);
     if (btn) updateButtonLabel(btn);
     applyOrder(currentOrder);
@@ -343,6 +350,7 @@
       injectOrUpdateChecksIndicator();
 
       const cfg = getCurrentPageConfig();
+      if (!cfg) return;
       const freshTargets = cfg.getTargets();
       if (!freshTargets.length) return;
 
@@ -373,7 +381,7 @@
       await chrome.storage.local.set({ [RESET_VERSION_KEY]: CURRENT_RESET_VERSION });
       currentOrder = ORDER.NEWEST;
     } else {
-      currentOrder = stored[STORAGE_KEY] || ORDER.NEWEST;
+      currentOrder = /** @type {string} */ (stored[STORAGE_KEY] || ORDER.NEWEST);
     }
 
     startBodyWatcher();

@@ -1,3 +1,4 @@
+// @ts-check
 // PR status-checks detection for the Conversation page (issue #1).
 //
 // GitHub renders the PR's status checks in the merge box near the BOTTOM
@@ -23,6 +24,7 @@
   // names are CSS-module-hashed (`MergeBox-module__mergePartialContainer__x`)
   // so we match on the stable human-readable prefix and fall back through
   // a couple of related containers.
+  /** @param {ParentNode} [root] */
   function findChecksBox(root) {
     const scope = root || document;
     return (
@@ -34,6 +36,7 @@
   }
 
   // The accessible labels of the individual check rows within the box.
+  /** @param {ParentNode} [root] */
   function getCheckLabels(root) {
     const scope = root || document;
     const box = findChecksBox(scope) || scope;
@@ -46,8 +49,10 @@
   // Precedence: any failure -> failing; else any in-flight -> running;
   // else any success -> passing; else unknown. Checked in that order so a
   // single red check dominates the summary, matching GitHub's own rollup.
+  /** @param {string[] | string} labels */
   function deriveChecksState(labels) {
     const list = Array.isArray(labels) ? labels : [labels || ""];
+    /** @param {RegExp} re */
     const any = (re) => list.some((l) => re.test(l));
 
     if (any(/(fail|error|timed out|cancel|denied|action required)/i)) {

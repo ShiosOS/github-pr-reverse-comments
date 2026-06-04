@@ -25,7 +25,7 @@
   "content_scripts": [
     {
       "matches": ["https://github.com/*/*/pull/*"],
-      "js": ["content.js"],
+      "js": ["constants.js", "reorder.js", "content.js"],
       "run_at": "document_idle"
     }
   ],

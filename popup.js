@@ -1,18 +1,18 @@
-const STORAGE_KEY = "prCommentOrder";
+// STORAGE_KEY and ORDER come from constants.js (loaded first in popup.html).
 
 const buttons = {
-  newest: document.getElementById("newest"),
-  oldest: document.getElementById("oldest"),
+  [ORDER.NEWEST]: document.getElementById("newest"),
+  [ORDER.OLDEST]: document.getElementById("oldest"),
 };
 
 function render(order) {
-  buttons.newest.classList.toggle("active", order === "newest");
-  buttons.oldest.classList.toggle("active", order === "oldest");
+  buttons[ORDER.NEWEST].classList.toggle("active", order === ORDER.NEWEST);
+  buttons[ORDER.OLDEST].classList.toggle("active", order === ORDER.OLDEST);
 }
 
 async function init() {
   const stored = await chrome.storage.local.get(STORAGE_KEY);
-  render(stored[STORAGE_KEY] || "newest");
+  render(stored[STORAGE_KEY] || ORDER.NEWEST);
 }
 
 for (const [order, btn] of Object.entries(buttons)) {

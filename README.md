@@ -49,7 +49,7 @@ The extension works until you close Firefox.
 #### Permanent: install the signed `.xpi` from the Releases page
 
 1. Go to the [latest release](https://github.com/ShiosOS/github-pr-reverse-comments/releases/latest).
-2. Download `github-pr-reverse-comments-1.0.0.xpi` (the file ending in `.xpi`).
+2. Download the file ending in `.xpi` (e.g. `github-pr-reverse-comments-1.0.6.xpi`).
 3. Drag the downloaded `.xpi` into a Firefox window. Firefox will show a
    permission prompt — click **Add** to install it permanently.
 
@@ -95,12 +95,11 @@ The full list of permissions:
 (URL looks like `https://github.com/owner/repo/pull/123`). The extension
 only runs on PR pages, not on issues, code views, or the repo home.
 
-**The button appears but clicking it doesn't change anything.** Open the
-browser's developer console (F12 → Console) and look for messages starting
-with `[PRRC]`. If you see `no matching container/item selector found`,
-GitHub has shipped a new design variant the extension doesn't recognize
-yet — please [open an issue](https://github.com/ShiosOS/github-pr-reverse-comments/issues)
-and paste those console messages so it can be fixed.
+**The button appears but clicking it doesn't change anything.** GitHub has
+likely shipped a new design variant whose timeline/commit containers the
+extension doesn't recognize yet — please
+[open an issue](https://github.com/ShiosOS/github-pr-reverse-comments/issues)
+with the PR URL so the selectors can be updated.
 
 **I clicked the button and now I'm stuck on oldest-first.** Click it again
 to flip back, or open the extension's popup (toolbar icon) and pick
@@ -110,16 +109,32 @@ to flip back, or open the extension's popup (toolbar icon) and pick
 
 ## Building / contributing
 
-There is no build step. Every file in this repo is the same file the
-browser runs. To make a change, edit the source, reload the extension at
-`chrome://extensions` (or re-install the temporary add-on in Firefox), and
-refresh a PR page.
+There is **no build step for the shipped extension** — the browser runs the
+source files in this repo as-is. To make a change, edit the source, reload
+the extension at `chrome://extensions` (or re-install the temporary add-on
+in Firefox), and refresh a PR page.
 
-| File           | Purpose                                                  |
-| -------------- | -------------------------------------------------------- |
-| `manifest.json`| Extension definition (Manifest V3, Chrome + Firefox)     |
-| `content.js`   | Runs on PR pages; reorders comments, draws the toggle    |
-| `popup.html`   | Toolbar popup UI                                         |
-| `popup.js`     | Popup behavior; reads/writes saved preference            |
+| File            | Purpose                                               |
+| --------------- | ----------------------------------------------------- |
+| `manifest.json` | Extension definition (Manifest V3, Chrome + Firefox)  |
+| `constants.js`  | Shared constants (storage key, order values)          |
+| `reorder.js`    | Pure DOM-reordering helpers (unit-tested)             |
+| `content.js`    | Runs on PR pages; reorders comments, draws the toggle |
+| `background.js` | Keeps the toolbar icon in sync with the current tab   |
+| `popup.html`    | Toolbar popup UI                                      |
+| `popup.js`      | Popup behavior; reads/writes saved preference         |
+
+### Dev tooling (optional)
+
+Linting, formatting, and tests use Node and are **not** required to run the
+extension — they only help when contributing.
+
+```sh
+npm install      # install dev dependencies
+npm run lint     # ESLint
+npm run format   # Prettier (writes)
+npm test         # Vitest unit tests for reorder.js
+npm run build    # produce the .zip / .xpi (version read from manifest.json)
+```
 
 Pull requests welcome.

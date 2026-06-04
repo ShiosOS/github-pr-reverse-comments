@@ -12,14 +12,15 @@
 // page. Non-supported PR sub-tabs (Files Changed, Checks) are ignored.
 
 (() => {
-  const STORAGE_KEY = "prCommentOrder"; // "newest" | "oldest"
+  // STORAGE_KEY and ORDER come from constants.js (loaded first);
+  // firstMatchingTarget and applyOrderToTarget come from reorder.js.
   const RESET_VERSION_KEY = "prrcDefaultResetVersion";
   const CURRENT_RESET_VERSION = 1;
   const BUTTON_ID = "pr-reverse-comments-toggle";
   const AUTOTEST_STATUS_ID = "pr-reverse-comments-autotest-status";
 
   // Per-page configuration. `getTargets()` returns an array of
-  //   { el, item, containerSel }
+  //   { el, item, descendant }
   // — one entry per DOM region that should be reversed. Conversation has
   // exactly one (the timeline); Commits has many (the list of date
   // groups, plus the inner <ol> of every individual date group).
@@ -30,12 +31,22 @@
       getTargets: () => {
         const candidates = [
           { container: ".js-discussion", item: ".js-timeline-item" },
-          { container: '[data-testid="issue-viewer-issue-container"]', item: '[data-testid^="issue-viewer-comment"]' },
+          {
+            container: '[data-testid="issue-viewer-issue-container"]',
+            item: '[data-testid^="issue-viewer-comment"]',
+          },
           { container: '[data-testid="pr-timeline"]', item: '[data-testid^="pr-timeline-item"]' },
           { container: ".pull-discussion-timeline", item: ".js-timeline-item" },
         ];
         const t = firstMatchingTarget(candidates);
-        return t ? [t] : [];
+        const targets = t ? [t] : [];
+
+        // The batch as a whole is one .js-timeline-item (reversed by the
+        // target above); also reverse the individual commits inside each
+        // "added N commits" batch so they read newest-first too.
+        targets.push(...pushedCommitTargets());
+
+        return targets;
       },
     },
     {
@@ -76,7 +87,6 @@
               targets.push({
                 el: dayParent,
                 item: ".Timeline-Item",
-                containerSel: "[data-testid='commits-list'] .Timeline-Item parent",
                 descendant: false,
               });
             }
@@ -92,7 +102,6 @@
               targets.push({
                 el: ul,
                 item: 'li[data-testid="commit-row-item"]',
-                containerSel: 'ul[data-listview-component="items-list"]',
                 descendant: false,
               });
             }
@@ -115,7 +124,6 @@
             targets.push({
               el: ol,
               item: ":scope > li",
-              containerSel: ".js-commit-group ol",
               descendant: false,
             });
           }
@@ -126,30 +134,10 @@
     },
   ];
 
-  let currentOrder = "newest";
+  let currentOrder = ORDER.NEWEST;
   let isSorting = false;
   let observers = [];
   let activeTargets = []; // [{ el, item, ... }]
-
-  // Try (container, item) pairs in order. For each, prefer items as
-  // direct children of the container; fall back to descendant items if
-  // the container has at least 2 matching descendants. Returns the first
-  // pair that finds 2+ items, or null.
-  function firstMatchingTarget(candidates) {
-    for (const pair of candidates) {
-      const el = document.querySelector(pair.container);
-      if (!el) continue;
-      const direct = el.querySelectorAll(`:scope > ${pair.item}`);
-      if (direct.length >= 2) {
-        return { el, item: pair.item, containerSel: pair.container, descendant: false };
-      }
-      const any = el.querySelectorAll(pair.item);
-      if (any.length >= 2) {
-        return { el, item: pair.item, containerSel: pair.container, descendant: true };
-      }
-    }
-    return null;
-  }
 
   function getCurrentPageConfig() {
     const path = location.pathname;
@@ -158,62 +146,6 @@
 
   function onSupportedPage() {
     return getCurrentPageConfig() !== null;
-  }
-
-  // Reverse one specific target's items in place. Preserves the slots
-  // of any non-matching siblings.
-  function applyOrderToTarget(target, order) {
-    const { el: container, item, descendant } = target;
-
-    let itemParent = container;
-    let items;
-    if (descendant) {
-      const firstItem = container.querySelector(item);
-      itemParent = firstItem?.parentElement || container;
-      items = Array.from(itemParent.children).filter((c) => c.matches(item));
-    } else {
-      items = Array.from(container.children).filter((c) => c.matches(item));
-    }
-
-    if (items.length < 2) return false;
-
-    // Stamp original positions on first sight.
-    let nextIndex = 0;
-    for (const it of items) {
-      const idx = it.dataset.prrcIndex;
-      if (idx !== undefined) {
-        const n = parseInt(idx, 10);
-        if (!Number.isNaN(n) && n >= nextIndex) nextIndex = n + 1;
-      }
-    }
-    for (const it of items) {
-      if (it.dataset.prrcIndex === undefined) {
-        it.dataset.prrcIndex = String(nextIndex++);
-      }
-    }
-
-    const allChildren = Array.from(itemParent.children);
-    const slots = allChildren
-      .map((c, i) => (c.matches(item) ? i : -1))
-      .filter((i) => i !== -1);
-
-    const sortedItems = [...items].sort((a, b) => {
-      const ai = parseInt(a.dataset.prrcIndex, 10);
-      const bi = parseInt(b.dataset.prrcIndex, 10);
-      return order === "newest" ? bi - ai : ai - bi;
-    });
-
-    const newChildren = allChildren.slice();
-    slots.forEach((slotIdx, k) => { newChildren[slotIdx] = sortedItems[k]; });
-
-    let changed = false;
-    for (let i = 0; i < newChildren.length; i++) {
-      if (newChildren[i] !== allChildren[i]) { changed = true; break; }
-    }
-    if (!changed) return false;
-
-    for (const c of newChildren) itemParent.appendChild(c);
-    return true;
   }
 
   function applyOrder(order) {
@@ -229,7 +161,9 @@
     try {
       for (const t of targets) applyOrderToTarget(t, order);
     } finally {
-      setTimeout(() => { isSorting = false; }, 0);
+      setTimeout(() => {
+        isSorting = false;
+      }, 0);
     }
   }
 
@@ -244,13 +178,13 @@
 
     for (const target of activeTargets) {
       const watch = target.descendant
-        ? (target.el.querySelector(target.item)?.parentElement || target.el)
+        ? target.el.querySelector(target.item)?.parentElement || target.el
         : target.el;
 
       const obs = new MutationObserver((mutations) => {
         if (isSorting) return;
         const structural = mutations.some(
-          (m) => m.type === "childList" && (m.addedNodes.length || m.removedNodes.length)
+          (m) => m.type === "childList" && (m.addedNodes.length || m.removedNodes.length),
         );
         if (!structural) return;
 
@@ -281,12 +215,12 @@
       "border-radius: 6px",
       "font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       "cursor: pointer",
-      "box-shadow: 0 2px 8px rgba(0,0,0,0.3)"
+      "box-shadow: 0 2px 8px rgba(0,0,0,0.3)",
     ].join(";");
     updateButtonLabel(btn);
 
     btn.addEventListener("click", () => {
-      currentOrder = currentOrder === "newest" ? "oldest" : "newest";
+      currentOrder = currentOrder === ORDER.NEWEST ? ORDER.OLDEST : ORDER.NEWEST;
       chrome.storage.local.set({ [STORAGE_KEY]: currentOrder });
       updateButtonLabel(btn);
       applyOrder(currentOrder);
@@ -385,13 +319,13 @@
   }
 
   function updateButtonLabel(btn) {
-    btn.textContent = currentOrder === "newest" ? "↓ Newest first" : "↑ Oldest first";
-    btn.title = `Click to switch to ${currentOrder === "newest" ? "oldest" : "newest"} first`;
+    btn.textContent = currentOrder === ORDER.NEWEST ? "↓ Newest first" : "↑ Oldest first";
+    btn.title = `Click to switch to ${currentOrder === ORDER.NEWEST ? ORDER.OLDEST : ORDER.NEWEST} first`;
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !changes[STORAGE_KEY]) return;
-    currentOrder = changes[STORAGE_KEY].newValue || "newest";
+    currentOrder = changes[STORAGE_KEY].newValue || ORDER.NEWEST;
     const btn = document.getElementById(BUTTON_ID);
     if (btn) updateButtonLabel(btn);
     applyOrder(currentOrder);
@@ -452,9 +386,9 @@
     if (stored[RESET_VERSION_KEY] !== CURRENT_RESET_VERSION) {
       await chrome.storage.local.remove(STORAGE_KEY);
       await chrome.storage.local.set({ [RESET_VERSION_KEY]: CURRENT_RESET_VERSION });
-      currentOrder = "newest";
+      currentOrder = ORDER.NEWEST;
     } else {
-      currentOrder = stored[STORAGE_KEY] || "newest";
+      currentOrder = stored[STORAGE_KEY] || ORDER.NEWEST;
     }
 
     startBodyWatcher();

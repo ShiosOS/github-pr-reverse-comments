@@ -16,7 +16,8 @@ const DISABLED_PATH = { 16: "icon-16-disabled.png", 48: "icon-48-disabled.png" }
 //   /owner/repo/pull/N/commits    (Commits)
 // All other sub-paths (/files, /checks, deep diff anchors) leave the
 // toolbar icon in the disabled state.
-const ACTIVE_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+(?:\/commits)?\/?(?:[?#].*)?$/;
+const ACTIVE_URL_RE =
+  /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+(?:\/commits)?\/?(?:[?#].*)?$/;
 
 function isActiveUrl(url) {
   return typeof url === "string" && ACTIVE_URL_RE.test(url);

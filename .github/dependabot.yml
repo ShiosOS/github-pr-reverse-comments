@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Dev dependencies (ESLint, Prettier, Vitest, etc.).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        patterns:
+          - "*"
+
+  # GitHub Actions used by the workflows (keeps the pinned SHAs current).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

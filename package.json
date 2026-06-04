@@ -3,6 +3,9 @@
   "version": "1.1.0",
   "description": "Dev tooling for the GitHub PR Reverse Comments browser extension. The extension itself has no build step; these scripts only lint, format, test, and package it.",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "lint": "eslint .",
     "format": "prettier --write .",

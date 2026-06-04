@@ -1,3 +1,4 @@
+// @ts-check
 // GitHub PR Reverse Comments — background service worker
 //
 // Single job: keep the toolbar icon in sync with whether the current tab
@@ -19,10 +20,15 @@ const DISABLED_PATH = { 16: "icon-16-disabled.png", 48: "icon-48-disabled.png" }
 const ACTIVE_URL_RE =
   /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+(?:\/commits)?\/?(?:[?#].*)?$/;
 
+/** @param {unknown} url */
 function isActiveUrl(url) {
   return typeof url === "string" && ACTIVE_URL_RE.test(url);
 }
 
+/**
+ * @param {number | undefined} tabId
+ * @param {string | undefined} url
+ */
 function setIconForTab(tabId, url) {
   const path = isActiveUrl(url) ? ACTIVE_PATH : DISABLED_PATH;
   chrome.action.setIcon({ tabId, path }).catch(() => {

@@ -10,6 +10,9 @@ const sharedGlobals = {
   firstMatchingTarget: "readonly",
   pushedCommitTargets: "readonly",
   applyOrderToTarget: "readonly",
+  findChecksBox: "readonly",
+  getCheckLabels: "readonly",
+  deriveChecksState: "readonly",
 };
 
 export default [
@@ -20,7 +23,7 @@ export default [
   // UMD modules: run in the browser (extension) AND under Node (tests),
   // so they legitimately reference both `globalThis`/window and module.
   {
-    files: ["constants.js", "reorder.js"],
+    files: ["constants.js", "reorder.js", "checks.js"],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node, ...sharedGlobals },
     },

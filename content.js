@@ -17,6 +17,7 @@
   const RESET_VERSION_KEY = "prrcDefaultResetVersion";
   const CURRENT_RESET_VERSION = 1;
   const BUTTON_ID = "pr-reverse-comments-toggle";
+  const CHECKS_STATUS_ID = "pr-reverse-comments-checks-status";
 
   // Per-page configuration. `getTargets()` returns an array of
   //   { el, item, descendant }
@@ -228,6 +229,80 @@
     document.body.appendChild(btn);
   }
 
+  // Where to put the checks indicator: at the very top of the conversation
+  // column, above the PR description. We insert *before* one of these
+  // anchors within its parent.
+  function getChecksIndicatorAnchor() {
+    const candidates = [
+      '[data-testid="issue-viewer-issue-container"] [data-testid="pr-timeline"]',
+      ".js-discussion",
+      ".pull-discussion-timeline",
+    ];
+    for (const sel of candidates) {
+      const el = document.querySelector(sel);
+      if (el && el.parentElement) return el;
+    }
+    return null;
+  }
+
+  function scrollToChecksBox() {
+    const box = findChecksBox();
+    if (!box) return;
+    box.scrollIntoView({ behavior: "smooth", block: "center" });
+    box.style.outline = "2px solid #1f6feb";
+    box.style.borderRadius = "6px";
+    setTimeout(() => {
+      box.style.outline = "";
+    }, 1500);
+  }
+
+  function injectOrUpdateChecksIndicator() {
+    const existing = document.getElementById(CHECKS_STATUS_ID);
+    const cfg = getCurrentPageConfig();
+    if (!cfg || cfg.name !== "conversation") {
+      if (existing) existing.remove();
+      return;
+    }
+
+    const anchor = getChecksIndicatorAnchor();
+    if (!findChecksBox() || !anchor || !anchor.parentElement) {
+      if (existing) existing.remove();
+      return;
+    }
+
+    const state = deriveChecksState(getCheckLabels());
+    const indicator = existing || document.createElement("button");
+    if (!existing) {
+      indicator.id = CHECKS_STATUS_ID;
+      indicator.type = "button";
+      indicator.style.cssText = [
+        "display: inline-block",
+        "margin: 8px 0 12px 0",
+        "padding: 6px 10px",
+        "background: var(--bgColor-muted, #f6f8fa)",
+        "border-radius: 6px",
+        "font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "cursor: pointer",
+      ].join(";");
+      indicator.title = "Click to jump to the PR status checks";
+      indicator.addEventListener("click", scrollToChecksBox);
+    }
+
+    // Only write to the DOM when the status actually changed; otherwise the
+    // body MutationObserver that calls us would see our own text/style
+    // mutations and reschedule forever.
+    if (indicator.dataset.prrcState !== state.key) {
+      indicator.dataset.prrcState = state.key;
+      indicator.textContent = state.label;
+      indicator.style.border = `1px solid ${state.color}`;
+      indicator.style.color = state.color;
+    }
+
+    if (indicator !== anchor.previousElementSibling) {
+      anchor.parentElement.insertBefore(indicator, anchor);
+    }
+  }
+
   function updateButtonLabel(btn) {
     btn.textContent = currentOrder === ORDER.NEWEST ? "↓ Newest first" : "↑ Oldest first";
     btn.title = `Click to switch to ${currentOrder === ORDER.NEWEST ? ORDER.OLDEST : ORDER.NEWEST} first`;
@@ -255,6 +330,8 @@
       if (!onSupportedPage()) {
         const btn = document.getElementById(BUTTON_ID);
         if (btn) btn.remove();
+        const checks = document.getElementById(CHECKS_STATUS_ID);
+        if (checks) checks.remove();
         disconnectObservers();
         activeTargets = [];
         return;
@@ -263,6 +340,7 @@
       if (!document.getElementById(BUTTON_ID)) {
         injectToggleButton();
       }
+      injectOrUpdateChecksIndicator();
 
       const cfg = getCurrentPageConfig();
       const freshTargets = cfg.getTargets();
@@ -301,6 +379,7 @@
     startBodyWatcher();
     if (onSupportedPage()) {
       injectToggleButton();
+      injectOrUpdateChecksIndicator();
     }
     scheduleRebindIfNeeded();
   }

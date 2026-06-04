@@ -1,0 +1,8 @@
+# Normalize to LF in the repository, but check out CRLF in working trees
+# so every contributor edits with CRLF line endings.
+* text=auto eol=crlf
+
+# Binary assets — never apply line-ending conversion.
+*.png binary
+*.zip binary
+*.xpi binary

@@ -1,0 +1,43 @@
+name: Release
+
+# Cut a release by pushing a tag like `v1.1.0` (must match manifest.json).
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the GitHub Release and upload assets
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verify tag matches manifest version
+        run: |
+          manifest_version="v$(node -p "require('./manifest.json').version")"
+          if [ "$manifest_version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match manifest version $manifest_version" >&2
+            exit 1
+          fi
+
+      - run: npm run build
+
+      - name: Create GitHub Release with build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            github-pr-reverse-comments.zip \
+            github-pr-reverse-comments-*.xpi \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

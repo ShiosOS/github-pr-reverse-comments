@@ -2,8 +2,29 @@ import { describe, it, expect, beforeEach } from "vitest";
 import reorder from "../reorder.js";
 import constants from "../constants.js";
 
-const { firstMatchingTarget, applyOrderToTarget } = reorder;
+const { firstMatchingTarget, pushedCommitTargets, applyOrderToTarget } = reorder;
 const { ORDER } = constants;
+
+// Mirrors the real Conversation-timeline shape for a pushed-commit batch:
+//   .js-timeline-item > div > (div#commits-pushed-XXX, div > .TimelineItem*)
+function buildPushBatch(sha, commitCount) {
+  const item = el("div", "");
+  item.className = "js-timeline-item";
+  const inner = el("div", "");
+  const header = el("div", "");
+  header.id = `commits-pushed-${sha}`;
+  header.className = "TimelineItem";
+  const wrapper = el("div", "");
+  for (let i = 0; i < commitCount; i++) {
+    const commit = el("div", `commit-${sha}-${i}`);
+    commit.className = "TimelineItem";
+    wrapper.appendChild(commit);
+  }
+  inner.append(header, wrapper);
+  item.appendChild(inner);
+  document.body.appendChild(item);
+  return { item, wrapper };
+}
 
 beforeEach(() => {
   document.body.innerHTML = "";
@@ -66,6 +87,46 @@ describe("firstMatchingTarget", () => {
       { container: "#second", item: "li" },
     ]);
     expect(t.el).toBe(ul);
+  });
+});
+
+describe("pushedCommitTargets", () => {
+  it("returns no targets when there are no pushed-commit batches", () => {
+    buildList(3);
+    expect(pushedCommitTargets()).toEqual([]);
+  });
+
+  it("targets the commit wrapper after each commits-pushed header", () => {
+    const { wrapper } = buildPushBatch("abc123", 3);
+    const targets = pushedCommitTargets();
+    expect(targets).toHaveLength(1);
+    expect(targets[0]).toMatchObject({ el: wrapper, item: ".TimelineItem", descendant: false });
+  });
+
+  it("skips batches with fewer than 2 commits", () => {
+    buildPushBatch("solo", 1);
+    expect(pushedCommitTargets()).toEqual([]);
+  });
+
+  it("returns one target per batch and skips a header with no sibling wrapper", () => {
+    buildPushBatch("aaa", 2);
+    buildPushBatch("bbb", 4);
+    // A lone header with no following wrapper must not throw or match.
+    const orphan = el("div", "");
+    orphan.id = "commits-pushed-orphan";
+    document.body.appendChild(orphan);
+    expect(pushedCommitTargets()).toHaveLength(2);
+  });
+
+  it("reverses the commits inside a batch when applied (end-to-end)", () => {
+    const { wrapper } = buildPushBatch("zzz", 3);
+    const [target] = pushedCommitTargets();
+    applyOrderToTarget(target, ORDER.NEWEST);
+    expect(texts(wrapper, ".TimelineItem")).toEqual([
+      "commit-zzz-2",
+      "commit-zzz-1",
+      "commit-zzz-0",
+    ]);
   });
 });
 

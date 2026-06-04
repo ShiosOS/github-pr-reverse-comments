@@ -8,6 +8,7 @@ const sharedGlobals = {
   STORAGE_KEY: "readonly",
   ORDER: "readonly",
   firstMatchingTarget: "readonly",
+  pushedCommitTargets: "readonly",
   applyOrderToTarget: "readonly",
 };
 

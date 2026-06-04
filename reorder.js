@@ -34,6 +34,25 @@
     return null;
   }
 
+  // On the PR Conversation timeline, commits pushed to the PR appear in
+  // "added N commits" batches. Each batch has a `div[id^="commits-pushed-"]`
+  // header followed by a sibling wrapper whose .TimelineItem children are
+  // the individual commits. Returns a reverse-target for every batch
+  // wrapper holding 2+ commits, so they reorder like any other target.
+  function pushedCommitTargets(root) {
+    const scope = root || document;
+    const targets = [];
+    for (const header of scope.querySelectorAll('[id^="commits-pushed-"]')) {
+      const wrapper = header.nextElementSibling;
+      if (!wrapper) continue;
+      const commits = Array.from(wrapper.children).filter((c) => c.matches(".TimelineItem"));
+      if (commits.length >= 2) {
+        targets.push({ el: wrapper, item: ".TimelineItem", descendant: false });
+      }
+    }
+    return targets;
+  }
+
   // Reverse one specific target's items in place. Preserves the slots
   // of any non-matching siblings.
   function applyOrderToTarget(target, order) {
@@ -93,5 +112,5 @@
     return true;
   }
 
-  return { firstMatchingTarget, applyOrderToTarget };
+  return { firstMatchingTarget, pushedCommitTargets, applyOrderToTarget };
 });

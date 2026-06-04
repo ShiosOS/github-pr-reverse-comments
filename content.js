@@ -38,7 +38,14 @@
           { container: ".pull-discussion-timeline", item: ".js-timeline-item" },
         ];
         const t = firstMatchingTarget(candidates);
-        return t ? [t] : [];
+        const targets = t ? [t] : [];
+
+        // The batch as a whole is one .js-timeline-item (reversed by the
+        // target above); also reverse the individual commits inside each
+        // "added N commits" batch so they read newest-first too.
+        targets.push(...pushedCommitTargets());
+
+        return targets;
       },
     },
     {

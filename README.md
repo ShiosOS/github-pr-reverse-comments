@@ -9,8 +9,8 @@ where you'd expect it; only the conversation timeline gets reversed.
 
 A small button in the bottom-right of every PR page lets you flip between
 **Newest first** and **Oldest first**. Your choice is remembered across
-page loads. If the timeline contains an `autotest` update, a status
-indicator appears near the top of the conversation and jumps to that block.
+page loads. When a PR has status checks, an indicator at the top of the
+conversation shows their overall state and jumps to the checks box.
 
 ![Toggle button in bottom-right](https://placehold.co/600x40/1f6feb/ffffff?text=%E2%86%93+Newest+first)
 
@@ -65,8 +65,9 @@ on github.com and:
 
 - Newest comment is at the top of the conversation.
 - The PR description stays where it always was, above the timeline.
-- If an `autotest` timeline block exists, you'll see a status indicator
-  near the top. Click it to jump straight to that block.
+- If the PR has status checks, a status indicator near the top shows
+  their overall state (passing / failing / running). Click it to jump
+  to the checks box.
 - The **↓ Newest first** button in the bottom-right corner toggles the
   order. Click it to switch to oldest-first; click again to switch back.
 - Your preference is saved automatically and applies to every PR you visit.

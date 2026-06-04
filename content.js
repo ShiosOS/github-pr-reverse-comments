@@ -17,7 +17,7 @@
   const RESET_VERSION_KEY = "prrcDefaultResetVersion";
   const CURRENT_RESET_VERSION = 1;
   const BUTTON_ID = "pr-reverse-comments-toggle";
-  const AUTOTEST_STATUS_ID = "pr-reverse-comments-autotest-status";
+  const CHECKS_STATUS_ID = "pr-reverse-comments-checks-status";
 
   // Per-page configuration. `getTargets()` returns an array of
   //   { el, item, descendant }
@@ -229,35 +229,10 @@
     document.body.appendChild(btn);
   }
 
-  function getAutotestTimelineItem() {
-    const candidates = [
-      '[data-testid="issue-viewer-issue-container"] [data-testid^="issue-viewer-comment"]',
-      '[data-testid="pr-timeline"] [data-testid^="pr-timeline-item"]',
-      ".js-discussion .js-timeline-item",
-      ".pull-discussion-timeline .js-timeline-item",
-    ];
-    for (const sel of candidates) {
-      for (const el of document.querySelectorAll(sel)) {
-        if ((el.textContent || "").toLowerCase().includes("autotest")) return el;
-      }
-    }
-    return null;
-  }
-
-  function getAutotestState(text) {
-    if (/(fail|error|timed out|cancelled|canceled)/i.test(text)) {
-      return { label: "✗ Autotest failing", color: "#da3633" };
-    }
-    if (/(pass|success|succeed)/i.test(text)) {
-      return { label: "✓ Autotest passing", color: "#238636" };
-    }
-    if (/(pending|in progress|queued|running)/i.test(text)) {
-      return { label: "• Autotest running", color: "#9a6700" };
-    }
-    return { label: "• Autotest status", color: "#1f6feb" };
-  }
-
-  function getAutotestInsertBeforeNode() {
+  // Where to put the checks indicator: at the very top of the conversation
+  // column, above the PR description. We insert *before* one of these
+  // anchors within its parent.
+  function getChecksIndicatorAnchor() {
     const candidates = [
       '[data-testid="issue-viewer-issue-container"] [data-testid="pr-timeline"]',
       ".js-discussion",
@@ -270,25 +245,35 @@
     return null;
   }
 
-  function injectOrUpdateAutotestIndicator() {
-    const existing = document.getElementById(AUTOTEST_STATUS_ID);
+  function scrollToChecksBox() {
+    const box = findChecksBox();
+    if (!box) return;
+    box.scrollIntoView({ behavior: "smooth", block: "center" });
+    box.style.outline = "2px solid #1f6feb";
+    box.style.borderRadius = "6px";
+    setTimeout(() => {
+      box.style.outline = "";
+    }, 1500);
+  }
+
+  function injectOrUpdateChecksIndicator() {
+    const existing = document.getElementById(CHECKS_STATUS_ID);
     const cfg = getCurrentPageConfig();
     if (!cfg || cfg.name !== "conversation") {
       if (existing) existing.remove();
       return;
     }
 
-    const target = getAutotestTimelineItem();
-    const insertBefore = getAutotestInsertBeforeNode();
-    if (!target || !insertBefore || !insertBefore.parentElement) {
+    const anchor = getChecksIndicatorAnchor();
+    if (!findChecksBox() || !anchor || !anchor.parentElement) {
       if (existing) existing.remove();
       return;
     }
 
-    const state = getAutotestState(target.textContent || "");
+    const state = deriveChecksState(getCheckLabels());
     const indicator = existing || document.createElement("button");
     if (!existing) {
-      indicator.id = AUTOTEST_STATUS_ID;
+      indicator.id = CHECKS_STATUS_ID;
       indicator.type = "button";
       indicator.style.cssText = [
         "display: inline-block",
@@ -299,22 +284,22 @@
         "font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         "cursor: pointer",
       ].join(";");
-      indicator.addEventListener("click", () => {
-        const freshTarget = getAutotestTimelineItem();
-        if (!freshTarget) return;
-        freshTarget.scrollIntoView({ behavior: "smooth", block: "center" });
-        freshTarget.style.outline = "2px solid #1f6feb";
-        setTimeout(() => { freshTarget.style.outline = ""; }, 1200);
-      });
+      indicator.title = "Click to jump to the PR status checks";
+      indicator.addEventListener("click", scrollToChecksBox);
     }
 
-    indicator.textContent = state.label;
-    indicator.title = "Click to jump to autotest status in the timeline";
-    indicator.style.border = `1px solid ${state.color}`;
-    indicator.style.color = state.color;
+    // Only write to the DOM when the status actually changed; otherwise the
+    // body MutationObserver that calls us would see our own text/style
+    // mutations and reschedule forever.
+    if (indicator.dataset.prrcState !== state.key) {
+      indicator.dataset.prrcState = state.key;
+      indicator.textContent = state.label;
+      indicator.style.border = `1px solid ${state.color}`;
+      indicator.style.color = state.color;
+    }
 
-    if (indicator !== insertBefore.previousElementSibling) {
-      insertBefore.parentElement.insertBefore(indicator, insertBefore);
+    if (indicator !== anchor.previousElementSibling) {
+      anchor.parentElement.insertBefore(indicator, anchor);
     }
   }
 
@@ -345,8 +330,8 @@
       if (!onSupportedPage()) {
         const btn = document.getElementById(BUTTON_ID);
         if (btn) btn.remove();
-        const autotest = document.getElementById(AUTOTEST_STATUS_ID);
-        if (autotest) autotest.remove();
+        const checks = document.getElementById(CHECKS_STATUS_ID);
+        if (checks) checks.remove();
         disconnectObservers();
         activeTargets = [];
         return;
@@ -355,7 +340,7 @@
       if (!document.getElementById(BUTTON_ID)) {
         injectToggleButton();
       }
-      injectOrUpdateAutotestIndicator();
+      injectOrUpdateChecksIndicator();
 
       const cfg = getCurrentPageConfig();
       const freshTargets = cfg.getTargets();
@@ -394,7 +379,7 @@
     startBodyWatcher();
     if (onSupportedPage()) {
       injectToggleButton();
-      injectOrUpdateAutotestIndicator();
+      injectOrUpdateChecksIndicator();
     }
     scheduleRebindIfNeeded();
   }

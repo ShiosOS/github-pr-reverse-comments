@@ -49,7 +49,7 @@ The extension works until you close Firefox.
 #### Permanent: install the signed `.xpi` from the Releases page
 
 1. Go to the [latest release](https://github.com/ShiosOS/github-pr-reverse-comments/releases/latest).
-2. Download the file ending in `.xpi` (e.g. `github-pr-reverse-comments-1.0.6.xpi`).
+2. Download the file ending in `.xpi` (e.g. `github-pr-reverse-comments-1.1.0.xpi`).
 3. Drag the downloaded `.xpi` into a Firefox window. Firefox will show a
    permission prompt — click **Add** to install it permanently.
 

@@ -14,7 +14,8 @@
     "default_title": "GitHub PR Reverse Comments",
     "default_icon": {
       "16": "icon-16-disabled.png",
-      "48": "icon-48-disabled.png"
+      "48": "icon-48-disabled.png",
+      "128": "icon-128-disabled.png"
     },
     "default_popup": "popup.html"
   },
@@ -25,7 +26,7 @@
   "content_scripts": [
     {
       "matches": ["https://github.com/*/*/pull/*"],
-      "js": ["constants.js", "reorder.js", "checks.js", "content.js"],
+      "js": ["constants.js", "reorder.js", "checks.js", "pages.js", "content.js"],
       "run_at": "document_idle"
     }
   ],

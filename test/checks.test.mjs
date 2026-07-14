@@ -73,6 +73,24 @@ describe("deriveChecksState", () => {
     expect(deriveChecksState("everything successful").key).toBe("passing");
   });
 
+  it("is not fooled by status words embedded in check names", () => {
+    // Substring matching used to classify these as failing.
+    expect(deriveChecksState(["failover-suite successful in 2m"]).key).toBe("passing");
+    expect(deriveChecksState(["cancellation-service successful in 1m"]).key).toBe("passing");
+    expect(deriveChecksState(["unfailing-tests successful"]).key).toBe("passing");
+  });
+
+  it("still matches the real inflected status phrases", () => {
+    expect(deriveChecksState(["ci failed after 2m"]).key).toBe("failing");
+    expect(deriveChecksState(["ci failure"]).key).toBe("failing");
+    expect(deriveChecksState(["deploy cancelled after 10s"]).key).toBe("failing");
+    expect(deriveChecksState(["deploy canceled after 10s"]).key).toBe("failing");
+    expect(deriveChecksState(["lint timed out"]).key).toBe("failing");
+    expect(deriveChecksState(["review action required"]).key).toBe("failing");
+    expect(deriveChecksState(["build queued"]).key).toBe("running");
+    expect(deriveChecksState(["build in_progress"]).key).toBe("running");
+  });
+
   it("matches the real captured check set (running: one is waiting)", () => {
     expect(deriveChecksState(REAL_LABELS).key).toBe("running");
   });

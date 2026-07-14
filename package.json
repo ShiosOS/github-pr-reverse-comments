@@ -3,6 +3,14 @@
   "version": "1.1.0",
   "description": "Dev tooling for the GitHub PR Reverse Comments browser extension. The extension itself has no build step; these scripts only lint, format, test, and package it.",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ShiosOS/github-pr-reverse-comments.git"
+  },
+  "homepage": "https://github.com/ShiosOS/github-pr-reverse-comments#readme",
+  "bugs": {
+    "url": "https://github.com/ShiosOS/github-pr-reverse-comments/issues"
+  },
   "engines": {
     "node": ">=22"
   },

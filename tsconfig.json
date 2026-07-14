@@ -16,6 +16,7 @@
     "constants.js",
     "reorder.js",
     "checks.js",
+    "pages.js",
     "content.js",
     "background.js",
     "popup.js",

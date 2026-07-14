@@ -15,10 +15,18 @@
     Object.assign(root, factory());
   }
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  return {
-    // chrome.storage.local key holding the user's order preference.
-    STORAGE_KEY: "prCommentOrder",
-    // Allowed values for that preference.
-    ORDER: { NEWEST: "newest", OLDEST: "oldest" },
-  };
+  // chrome.storage.local key holding the user's order preference.
+  const STORAGE_KEY = "prCommentOrder";
+  // Allowed values for that preference.
+  const ORDER = { NEWEST: "newest", OLDEST: "oldest" };
+
+  // Coerce whatever came out of storage into a valid order value. Storage
+  // is a system boundary: a stale or corrupted value must not leave the
+  // button label saying one thing while the sort does another.
+  /** @param {unknown} value */
+  function normalizeOrder(value) {
+    return value === ORDER.OLDEST ? ORDER.OLDEST : ORDER.NEWEST;
+  }
+
+  return { STORAGE_KEY, ORDER, normalizeOrder };
 });

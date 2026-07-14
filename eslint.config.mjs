@@ -7,9 +7,11 @@ import prettier from "eslint-config-prettier";
 const sharedGlobals = {
   STORAGE_KEY: "readonly",
   ORDER: "readonly",
+  normalizeOrder: "readonly",
   firstMatchingTarget: "readonly",
   pushedCommitTargets: "readonly",
   applyOrderToTarget: "readonly",
+  getPageConfig: "readonly",
   findChecksBox: "readonly",
   getCheckLabels: "readonly",
   deriveChecksState: "readonly",
@@ -23,7 +25,7 @@ export default [
   // UMD modules: run in the browser (extension) AND under Node (tests),
   // so they legitimately reference both `globalThis`/window and module.
   {
-    files: ["constants.js", "reorder.js", "checks.js"],
+    files: ["constants.js", "reorder.js", "checks.js", "pages.js"],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node, ...sharedGlobals },
     },
@@ -37,11 +39,11 @@ export default [
     },
   },
 
-  // Background service worker.
+  // Background service worker (UMD so its logic is testable under Node).
   {
     files: ["background.js"],
     languageOptions: {
-      globals: { ...globals.serviceworker, chrome: "readonly" },
+      globals: { ...globals.serviceworker, ...globals.node, chrome: "readonly" },
     },
   },
 

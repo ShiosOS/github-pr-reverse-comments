@@ -4,6 +4,28 @@
     <meta charset="utf-8" />
     <title>PR Reverse Comments</title>
     <style>
+      /* GitHub-ish palette; follows the browser's light/dark preference
+         instead of forcing dark on light-mode users. */
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1f2328;
+        --fg-muted: #59636e;
+        --btn-bg: #f6f8fa;
+        --btn-border: #d1d9e0;
+        --btn-hover: #eef1f4;
+        --accent: #1f6feb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d1117;
+          --fg: #c9d1d9;
+          --fg-muted: #8b949e;
+          --btn-bg: #21262d;
+          --btn-border: #30363d;
+          --btn-hover: #30363d;
+        }
+      }
       body {
         font:
           13px -apple-system,
@@ -13,8 +35,8 @@
         width: 220px;
         margin: 0;
         padding: 12px;
-        background: #0d1117;
-        color: #c9d1d9;
+        background: var(--bg);
+        color: var(--fg);
       }
       h1 {
         font-size: 13px;
@@ -22,7 +44,7 @@
       }
       p {
         margin: 0 0 10px 0;
-        color: #8b949e;
+        color: var(--fg-muted);
         font-size: 11px;
       }
       .row {
@@ -32,20 +54,20 @@
       button {
         flex: 1;
         padding: 6px 8px;
-        background: #21262d;
-        color: #c9d1d9;
-        border: 1px solid #30363d;
+        background: var(--btn-bg);
+        color: var(--fg);
+        border: 1px solid var(--btn-border);
         border-radius: 6px;
         cursor: pointer;
         font-size: 12px;
       }
       button.active {
-        background: #1f6feb;
-        border-color: #1f6feb;
+        background: var(--accent);
+        border-color: var(--accent);
         color: #fff;
       }
       button:hover:not(.active) {
-        background: #30363d;
+        background: var(--btn-hover);
       }
     </style>
   </head>

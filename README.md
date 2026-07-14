@@ -115,15 +115,22 @@ source files in this repo as-is. To make a change, edit the source, reload
 the extension at `chrome://extensions` (or re-install the temporary add-on
 in Firefox), and refresh a PR page.
 
-| File            | Purpose                                               |
-| --------------- | ----------------------------------------------------- |
-| `manifest.json` | Extension definition (Manifest V3, Chrome + Firefox)  |
-| `constants.js`  | Shared constants (storage key, order values)          |
-| `reorder.js`    | Pure DOM-reordering helpers (unit-tested)             |
-| `content.js`    | Runs on PR pages; reorders comments, draws the toggle |
-| `background.js` | Keeps the toolbar icon in sync with the current tab   |
-| `popup.html`    | Toolbar popup UI                                      |
-| `popup.js`      | Popup behavior; reads/writes saved preference         |
+| File            | Purpose                                                   |
+| --------------- | --------------------------------------------------------- |
+| `manifest.json` | Extension definition (Manifest V3, Chrome + Firefox)      |
+| `constants.js`  | Shared constants (storage key, order values)              |
+| `reorder.js`    | Pure DOM-reordering helpers (unit-tested)                 |
+| `checks.js`     | PR status-checks detection helpers (unit-tested)          |
+| `pages.js`      | Per-page GitHub DOM selectors and targets (unit-tested)   |
+| `content.js`    | Runs on PR pages; wires storage, observers, and the UI    |
+| `background.js` | Keeps the toolbar icon in sync with the tab (unit-tested) |
+| `popup.html`    | Toolbar popup UI                                          |
+| `popup.js`      | Popup behavior; reads/writes saved preference             |
+
+When GitHub ships a UI change that breaks reordering, the selectors to
+update live in `pages.js` (timeline/commits targets) and `checks.js`
+(status-checks box); each has jsdom tests with fixtures mirroring the real
+page structure, so start by updating the fixture to match the new DOM.
 
 ### Dev tooling (optional)
 
@@ -134,7 +141,8 @@ extension — they only help when contributing.
 npm install      # install dev dependencies
 npm run lint     # ESLint
 npm run format   # Prettier (writes)
-npm test         # Vitest unit tests for reorder.js
+npm run typecheck # tsc --checkJs over the extension sources
+npm test         # Vitest unit tests (reorder, checks, constants, packaging)
 npm run build    # produce the .zip / .xpi (version read from manifest.json)
 ```
 

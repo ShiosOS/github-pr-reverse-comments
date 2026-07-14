@@ -58,7 +58,7 @@ jobs:
       # version twice, so re-running this workflow for an existing tag will
       # fail here — bump the version instead.
       - name: Sign the Firefox .xpi with Mozilla (AMO)
-        if: env.AMO_JWT_ISSUER != ''
+        if: env.AMO_JWT_ISSUER != '' && env.AMO_JWT_SECRET != ''
         run: |
           version="$(node -p "require('./manifest.json').version")"
           mkdir -p /tmp/xpi-src /tmp/xpi-signed
@@ -75,7 +75,9 @@ jobs:
       # Upload the .zip to the Chrome Web Store and publish. Google's
       # review still happens asynchronously on their side afterwards.
       - name: Publish to the Chrome Web Store
-        if: env.CWS_EXTENSION_ID != ''
+        if: >-
+          env.CWS_EXTENSION_ID != '' && env.CWS_CLIENT_ID != '' &&
+          env.CWS_CLIENT_SECRET != '' && env.CWS_REFRESH_TOKEN != ''
         env:
           EXTENSION_ID: ${{ env.CWS_EXTENSION_ID }}
           CLIENT_ID: ${{ env.CWS_CLIENT_ID }}

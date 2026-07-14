@@ -12,6 +12,23 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Store-publishing credentials. Both publishing steps below are skipped
+    # when their secrets are absent, so the workflow degrades gracefully to
+    # a plain GitHub Release until the secrets are configured
+    # (repo Settings -> Secrets and variables -> Actions):
+    #   AMO_JWT_ISSUER / AMO_JWT_SECRET
+    #     addons.mozilla.org -> Tools -> Manage API Keys. Must belong to the
+    #     AMO account that owns the gecko id in manifest.json.
+    #   CWS_EXTENSION_ID / CWS_CLIENT_ID / CWS_CLIENT_SECRET / CWS_REFRESH_TOKEN
+    #     Chrome Web Store item id + OAuth credentials for the CWS API
+    #     (see https://developer.chrome.com/docs/webstore/using-api).
+    env:
+      AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+      AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+      CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -31,6 +48,43 @@ jobs:
           fi
 
       - run: npm run build
+
+      # Sign the .xpi with Mozilla so Firefox installs it permanently.
+      # `unlisted` is the self-distribution channel (installed by dragging
+      # the .xpi into Firefox, as the README describes) — switch to
+      # `--channel listed` only if the add-on moves to addons.mozilla.org,
+      # and note that listed submissions go through human review instead of
+      # returning a signed file immediately. AMO refuses to sign the same
+      # version twice, so re-running this workflow for an existing tag will
+      # fail here — bump the version instead.
+      - name: Sign the Firefox .xpi with Mozilla (AMO)
+        if: env.AMO_JWT_ISSUER != ''
+        run: |
+          version="$(node -p "require('./manifest.json').version")"
+          mkdir -p /tmp/xpi-src /tmp/xpi-signed
+          unzip -q "github-pr-reverse-comments-${version}.xpi" -d /tmp/xpi-src
+          npx web-ext@8 sign \
+            --source-dir /tmp/xpi-src \
+            --channel unlisted \
+            --api-key "$AMO_JWT_ISSUER" \
+            --api-secret "$AMO_JWT_SECRET" \
+            --artifacts-dir /tmp/xpi-signed
+          # Ship the signed file under the same name the Release step uploads.
+          mv /tmp/xpi-signed/*.xpi "github-pr-reverse-comments-${version}.xpi"
+
+      # Upload the .zip to the Chrome Web Store and publish. Google's
+      # review still happens asynchronously on their side afterwards.
+      - name: Publish to the Chrome Web Store
+        if: env.CWS_EXTENSION_ID != ''
+        env:
+          EXTENSION_ID: ${{ env.CWS_EXTENSION_ID }}
+          CLIENT_ID: ${{ env.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ env.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ env.CWS_REFRESH_TOKEN }}
+        run: |
+          npx chrome-webstore-upload-cli@3 upload \
+            --source github-pr-reverse-comments.zip \
+            --auto-publish
 
       - name: Create GitHub Release with build artifacts
         env:

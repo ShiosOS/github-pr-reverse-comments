@@ -120,6 +120,7 @@ in Firefox), and refresh a PR page.
 | `manifest.json` | Extension definition (Manifest V3, Chrome + Firefox)  |
 | `constants.js`  | Shared constants (storage key, order values)          |
 | `reorder.js`    | Pure DOM-reordering helpers (unit-tested)             |
+| `checks.js`     | PR status-checks detection helpers (unit-tested)      |
 | `content.js`    | Runs on PR pages; reorders comments, draws the toggle |
 | `background.js` | Keeps the toolbar icon in sync with the current tab   |
 | `popup.html`    | Toolbar popup UI                                      |
@@ -134,7 +135,8 @@ extension — they only help when contributing.
 npm install      # install dev dependencies
 npm run lint     # ESLint
 npm run format   # Prettier (writes)
-npm test         # Vitest unit tests for reorder.js
+npm run typecheck # tsc --checkJs over the extension sources
+npm test         # Vitest unit tests (reorder, checks, constants, packaging)
 npm run build    # produce the .zip / .xpi (version read from manifest.json)
 ```
 

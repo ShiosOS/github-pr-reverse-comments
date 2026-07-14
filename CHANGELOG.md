@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Release packaging omitted `checks.js`, so published `.zip`/`.xpi` builds
+  shipped without the status-checks helpers the content script depends on.
+  The packaged file list is now derived from `manifest.json` (plus popup
+  `<script>` tags) instead of being hand-maintained, missing files fail the
+  build, and a packaging test verifies the archive contents in CI.
+- The status-checks indicator now refreshes when GitHub updates a check's
+  label in place (e.g. running → successful) instead of waiting for
+  unrelated DOM changes.
+- The popup now reflects a preference change made via the in-page toggle
+  while it is open.
+- A corrupted stored preference value no longer desyncs the toggle label
+  from the actual sort order; anything unrecognized falls back to newest.
+
+### Added
+
+- Accessible labels (`aria-label`) on the injected toggle button and
+  status-checks indicator.
+- 128px toolbar icon variants wired into the action icon set.
+
 ## [1.1.0] - 2026-06-04
 
 ### Added

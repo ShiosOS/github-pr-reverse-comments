@@ -13,11 +13,10 @@ export default defineConfig({
       // provider under-reports with the threads pool in some sandboxed/CI
       // environments.
       provider: "istanbul",
-      // Measure only the pure, unit-tested logic modules. content.js,
-      // background.js, and popup.js are DOM/chrome glue exercised in a real
-      // browser, not under jsdom, so including them would report misleading
-      // zeros.
-      include: ["constants.js", "reorder.js", "checks.js"],
+      // Measure the unit-tested logic modules. content.js and popup.js are
+      // thin DOM/chrome glue exercised in a real browser, not under jsdom,
+      // so including them would report misleading zeros.
+      include: ["constants.js", "reorder.js", "checks.js", "pages.js", "background.js"],
       reporter: ["text", "lcov"],
       // Branches sits a little lower than the rest: each module's UMD
       // wrapper has a browser-global branch that can't run under Node tests.

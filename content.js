@@ -13,128 +13,15 @@
 // page. Non-supported PR sub-tabs (Files Changed, Checks) are ignored.
 
 (() => {
-  // STORAGE_KEY and ORDER come from constants.js (loaded first);
-  // firstMatchingTarget and applyOrderToTarget come from reorder.js.
+  // STORAGE_KEY, ORDER, and normalizeOrder come from constants.js (loaded
+  // first); applyOrderToTarget from reorder.js; getPageConfig (and every
+  // GitHub DOM selector) from pages.js; the checks helpers from checks.js.
   const RESET_VERSION_KEY = "prrcDefaultResetVersion";
   const CURRENT_RESET_VERSION = 1;
   const BUTTON_ID = "pr-reverse-comments-toggle";
   const CHECKS_STATUS_ID = "pr-reverse-comments-checks-status";
 
-  // Per-page configuration. `getTargets()` returns an array of
-  //   { el, item, descendant }
-  // — one entry per DOM region that should be reversed. Conversation has
-  // exactly one (the timeline); Commits has many (the list of date
-  // groups, plus the inner <ol> of every individual date group).
-  const PAGE_CONFIGS = [
-    {
-      name: "conversation",
-      pathRe: /^\/[^/]+\/[^/]+\/pull\/\d+\/?$/,
-      getTargets: () => {
-        const candidates = [
-          { container: ".js-discussion", item: ".js-timeline-item" },
-          {
-            container: '[data-testid="issue-viewer-issue-container"]',
-            item: '[data-testid^="issue-viewer-comment"]',
-          },
-          { container: '[data-testid="pr-timeline"]', item: '[data-testid^="pr-timeline-item"]' },
-          { container: ".pull-discussion-timeline", item: ".js-timeline-item" },
-        ];
-        const t = firstMatchingTarget(candidates);
-        const targets = t ? [t] : [];
-
-        // The batch as a whole is one .js-timeline-item (reversed by the
-        // target above); also reverse the individual commits inside each
-        // "added N commits" batch so they read newest-first too.
-        targets.push(...pushedCommitTargets());
-
-        return targets;
-      },
-    },
-    {
-      name: "commits",
-      pathRe: /^\/[^/]+\/[^/]+\/pull\/\d+\/commits\/?$/,
-      getTargets: () => {
-        const targets = [];
-
-        // Modern React-rendered Commits page. Structure (May 2026):
-        //   <div data-testid="commits-list">
-        //     <div class="prc-Timeline-Timeline-...">              ← Timeline wrapper
-        //       <div class="… Timeline-Item …">                    ← day group N
-        //         <h3 data-testid="commit-group-title">Commits on …</h3>
-        //         <ul data-listview-component="items-list">
-        //           <li data-testid="commit-row-item">…</li>       ← commit within day
-        //           …
-        //         </ul>
-        //       </div>
-        //       <div class="… Timeline-Item …">…</div>             ← day group N+1
-        //       …
-        //     </div>
-        //   </div>
-        //
-        // To make "newest first" feel right we have to reverse two
-        // levels at once: the .Timeline-Item day groups (so the most
-        // recent day moves to the top), AND the <li> commits inside
-        // each day's <ul> (so within a day the latest commit is on
-        // top). Doing only one of them gives a confusing half-flipped
-        // result.
-        const commitsList = document.querySelector('[data-testid="commits-list"]');
-        if (commitsList) {
-          const dayGroups = commitsList.querySelectorAll(".Timeline-Item");
-
-          // 1) Reverse the day groups themselves (only meaningful if 2+).
-          if (dayGroups.length >= 2) {
-            const dayParent = dayGroups[0].parentElement;
-            if (dayParent) {
-              targets.push({
-                el: dayParent,
-                item: ".Timeline-Item",
-                descendant: false,
-              });
-            }
-          }
-
-          // 2) Reverse commits within each day's <ul>.
-          for (const group of dayGroups) {
-            const ul = group.querySelector('ul[data-listview-component="items-list"]');
-            if (
-              ul &&
-              ul.querySelectorAll(':scope > li[data-testid="commit-row-item"]').length >= 2
-            ) {
-              targets.push({
-                el: ul,
-                item: 'li[data-testid="commit-row-item"]',
-                descendant: false,
-              });
-            }
-          }
-
-          if (targets.length) return targets;
-        }
-
-        // Legacy Rails-rendered Commits page: .js-commit-group date
-        // groups wrapping per-day ordered lists.
-        const groupTarget = firstMatchingTarget([
-          { container: ".js-commits-list", item: ".js-commit-group" },
-          { container: "#commits_bucket", item: ".js-commit-group" },
-        ]);
-        if (groupTarget) targets.push(groupTarget);
-
-        for (const group of document.querySelectorAll(".js-commit-group")) {
-          const ol = group.querySelector("ol");
-          if (ol && ol.querySelectorAll(":scope > li").length >= 2) {
-            targets.push({
-              el: ol,
-              item: ":scope > li",
-              descendant: false,
-            });
-          }
-        }
-
-        return targets;
-      },
-    },
-  ];
-
+  /** @type {PrrcOrder} */
   let currentOrder = ORDER.NEWEST;
   let isSorting = false;
   /** @type {MutationObserver[]} */
@@ -143,8 +30,7 @@
   let activeTargets = []; // [{ el, item, ... }]
 
   function getCurrentPageConfig() {
-    const path = location.pathname;
-    return PAGE_CONFIGS.find((c) => c.pathRe.test(path)) || null;
+    return getPageConfig(location.pathname);
   }
 
   function onSupportedPage() {
@@ -302,6 +188,9 @@
       indicator.textContent = state.label;
       indicator.style.border = `1px solid ${state.color}`;
       indicator.style.color = state.color;
+      // The visible label leans on color and a glyph (✓/✗/•); spell the
+      // status out for assistive tech.
+      indicator.setAttribute("aria-label", `PR status checks: ${state.key}. Jump to checks`);
     }
 
     if (indicator !== anchor.previousElementSibling) {
@@ -311,13 +200,16 @@
 
   /** @param {HTMLElement} btn */
   function updateButtonLabel(btn) {
+    const next = currentOrder === ORDER.NEWEST ? ORDER.OLDEST : ORDER.NEWEST;
     btn.textContent = currentOrder === ORDER.NEWEST ? "↓ Newest first" : "↑ Oldest first";
-    btn.title = `Click to switch to ${currentOrder === ORDER.NEWEST ? ORDER.OLDEST : ORDER.NEWEST} first`;
+    btn.title = `Click to switch to ${next} first`;
+    // The arrow glyph is decorative; give assistive tech a plain-text label.
+    btn.setAttribute("aria-label", `Comment order: ${currentOrder} first. Switch to ${next} first`);
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !changes[STORAGE_KEY]) return;
-    currentOrder = /** @type {string} */ (changes[STORAGE_KEY].newValue || ORDER.NEWEST);
+    currentOrder = normalizeOrder(changes[STORAGE_KEY].newValue);
     const btn = document.getElementById(BUTTON_ID);
     if (btn) updateButtonLabel(btn);
     applyOrder(currentOrder);
@@ -371,7 +263,16 @@
 
   function startBodyWatcher() {
     const bodyObs = new MutationObserver(scheduleRebindIfNeeded);
-    bodyObs.observe(document.body, { childList: true, subtree: true });
+    // aria-label is watched because GitHub updates a check row's label in
+    // place (e.g. "in progress" -> "successful") without any structural
+    // mutation; without it the checks indicator would go stale until some
+    // unrelated DOM churn happened to fire the observer.
+    bodyObs.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["aria-label"],
+    });
   }
 
   async function init() {
@@ -381,7 +282,7 @@
       await chrome.storage.local.set({ [RESET_VERSION_KEY]: CURRENT_RESET_VERSION });
       currentOrder = ORDER.NEWEST;
     } else {
-      currentOrder = /** @type {string} */ (stored[STORAGE_KEY] || ORDER.NEWEST);
+      currentOrder = normalizeOrder(stored[STORAGE_KEY]);
     }
 
     startBodyWatcher();
@@ -392,7 +293,11 @@
     scheduleRebindIfNeeded();
   }
 
-  init();
+  init().catch((err) => {
+    // A storage failure here leaves the extension inert on this page; make
+    // the cause visible instead of an unhandled rejection.
+    console.error("[pr-reverse-comments] initialization failed:", err);
+  });
 
   // Fast paths for the soft-nav events GitHub does fire — avoid waiting
   // for the next DOM mutation tick. The body watcher above is the real

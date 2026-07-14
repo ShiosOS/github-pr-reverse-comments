@@ -14,7 +14,8 @@
     "default_title": "GitHub PR Reverse Comments",
     "default_icon": {
       "16": "icon-16-disabled.png",
-      "48": "icon-48-disabled.png"
+      "48": "icon-48-disabled.png",
+      "128": "icon-128-disabled.png"
     },
     "default_popup": "popup.html"
   },

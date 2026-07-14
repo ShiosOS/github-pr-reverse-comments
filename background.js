@@ -9,8 +9,12 @@
 // so the icon updates correctly even when the user navigates to a
 // non-PR URL (where the content script doesn't run).
 
-const ACTIVE_PATH = { 16: "icon-16.png", 48: "icon-48.png" };
-const DISABLED_PATH = { 16: "icon-16-disabled.png", 48: "icon-48-disabled.png" };
+const ACTIVE_PATH = { 16: "icon-16.png", 48: "icon-48.png", 128: "icon-128.png" };
+const DISABLED_PATH = {
+  16: "icon-16-disabled.png",
+  48: "icon-48-disabled.png",
+  128: "icon-128-disabled.png",
+};
 
 // Matches any PR page the extension is active on:
 //   /owner/repo/pull/N            (Conversation)

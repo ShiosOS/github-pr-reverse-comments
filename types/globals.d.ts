@@ -21,6 +21,7 @@ interface PrrcChecksState {
 // (the UMD modules read `globalThis.ORDER`).
 declare var STORAGE_KEY: string;
 declare var ORDER: { NEWEST: string; OLDEST: string };
+declare function normalizeOrder(value: unknown): string;
 
 // reorder.js
 declare function firstMatchingTarget(

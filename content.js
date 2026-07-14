@@ -302,6 +302,9 @@
       indicator.textContent = state.label;
       indicator.style.border = `1px solid ${state.color}`;
       indicator.style.color = state.color;
+      // The visible label leans on color and a glyph (✓/✗/•); spell the
+      // status out for assistive tech.
+      indicator.setAttribute("aria-label", `PR status checks: ${state.key}. Jump to checks`);
     }
 
     if (indicator !== anchor.previousElementSibling) {
@@ -311,13 +314,16 @@
 
   /** @param {HTMLElement} btn */
   function updateButtonLabel(btn) {
+    const next = currentOrder === ORDER.NEWEST ? ORDER.OLDEST : ORDER.NEWEST;
     btn.textContent = currentOrder === ORDER.NEWEST ? "↓ Newest first" : "↑ Oldest first";
-    btn.title = `Click to switch to ${currentOrder === ORDER.NEWEST ? ORDER.OLDEST : ORDER.NEWEST} first`;
+    btn.title = `Click to switch to ${next} first`;
+    // The arrow glyph is decorative; give assistive tech a plain-text label.
+    btn.setAttribute("aria-label", `Comment order: ${currentOrder} first. Switch to ${next} first`);
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !changes[STORAGE_KEY]) return;
-    currentOrder = /** @type {string} */ (changes[STORAGE_KEY].newValue || ORDER.NEWEST);
+    currentOrder = normalizeOrder(changes[STORAGE_KEY].newValue);
     const btn = document.getElementById(BUTTON_ID);
     if (btn) updateButtonLabel(btn);
     applyOrder(currentOrder);
@@ -371,7 +377,16 @@
 
   function startBodyWatcher() {
     const bodyObs = new MutationObserver(scheduleRebindIfNeeded);
-    bodyObs.observe(document.body, { childList: true, subtree: true });
+    // aria-label is watched because GitHub updates a check row's label in
+    // place (e.g. "in progress" -> "successful") without any structural
+    // mutation; without it the checks indicator would go stale until some
+    // unrelated DOM churn happened to fire the observer.
+    bodyObs.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["aria-label"],
+    });
   }
 
   async function init() {
@@ -381,7 +396,7 @@
       await chrome.storage.local.set({ [RESET_VERSION_KEY]: CURRENT_RESET_VERSION });
       currentOrder = ORDER.NEWEST;
     } else {
-      currentOrder = /** @type {string} */ (stored[STORAGE_KEY] || ORDER.NEWEST);
+      currentOrder = normalizeOrder(stored[STORAGE_KEY]);
     }
 
     startBodyWatcher();

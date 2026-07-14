@@ -7,6 +7,7 @@ import prettier from "eslint-config-prettier";
 const sharedGlobals = {
   STORAGE_KEY: "readonly",
   ORDER: "readonly",
+  normalizeOrder: "readonly",
   firstMatchingTarget: "readonly",
   pushedCommitTargets: "readonly",
   applyOrderToTarget: "readonly",

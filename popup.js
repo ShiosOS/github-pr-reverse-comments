@@ -1,5 +1,6 @@
 // @ts-check
-// STORAGE_KEY and ORDER come from constants.js (loaded first in popup.html).
+// STORAGE_KEY, ORDER, and normalizeOrder come from constants.js (loaded
+// first in popup.html).
 
 const buttons = {
   [ORDER.NEWEST]: document.getElementById("newest"),
@@ -14,7 +15,7 @@ function render(order) {
 
 async function init() {
   const stored = await chrome.storage.local.get(STORAGE_KEY);
-  render(/** @type {string} */ (stored[STORAGE_KEY] || ORDER.NEWEST));
+  render(normalizeOrder(stored[STORAGE_KEY]));
 }
 
 for (const [order, btn] of Object.entries(buttons)) {
@@ -23,5 +24,12 @@ for (const [order, btn] of Object.entries(buttons)) {
     render(order);
   });
 }
+
+// Keep the popup in step with the in-page toggle button: both write the
+// same storage key, so a change from either side re-renders here.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes[STORAGE_KEY]) return;
+  render(normalizeOrder(changes[STORAGE_KEY].newValue));
+});
 
 init();

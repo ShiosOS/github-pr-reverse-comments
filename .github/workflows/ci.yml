@@ -52,3 +52,16 @@ jobs:
       - run: npm run coverage
 
       - run: npm run build
+
+  # Merge gate: branch protection requires a single status named "check".
+  # Reporting that name from an aggregate job (instead of the matrix legs,
+  # whose names carry the Node version) keeps the required-check name
+  # stable no matter how the matrix changes.
+  ci-ok:
+    name: check
+    needs: check
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every matrix leg succeeded
+        run: test "${{ needs.check.result }}" = "success"

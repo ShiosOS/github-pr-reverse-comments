@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-14
+
 ### Fixed
 
 - Release packaging omitted `checks.js`, so published `.zip`/`.xpi` builds
@@ -21,7 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while it is open.
 - A corrupted stored preference value no longer desyncs the toggle label
   from the actual sort order; anything unrecognized falls back to newest.
-
 - Status-word matching in the checks indicator uses word boundaries, so a
   check _named_ e.g. `failover-suite` or `cancellation-service` that passed
   is no longer misreported as failing.
@@ -70,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   day), including the modern React-rendered Commits page.
 - Firefox support (Manifest V3, signed `.xpi`).
 
-[Unreleased]: https://github.com/ShiosOS/github-pr-reverse-comments/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/ShiosOS/github-pr-reverse-comments/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/ShiosOS/github-pr-reverse-comments/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ShiosOS/github-pr-reverse-comments/releases/tag/v1.1.0
 [1.0.6]: https://github.com/ShiosOS/github-pr-reverse-comments/releases/tag/v1.0.6

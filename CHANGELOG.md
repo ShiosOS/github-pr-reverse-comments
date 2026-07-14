@@ -22,11 +22,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A corrupted stored preference value no longer desyncs the toggle label
   from the actual sort order; anything unrecognized falls back to newest.
 
+- Status-word matching in the checks indicator uses word boundaries, so a
+  check _named_ e.g. `failover-suite` or `cancellation-service` that passed
+  is no longer misreported as failing.
+
 ### Added
 
 - Accessible labels (`aria-label`) on the injected toggle button and
   status-checks indicator.
 - 128px toolbar icon variants wired into the action icon set.
+- The popup follows the browser's light/dark preference instead of always
+  rendering dark.
+
+### Changed
+
+- The per-page GitHub DOM selectors moved from `content.js` into a new
+  `pages.js` module, and `background.js` became importable under Node —
+  both are now covered by unit tests (79 tests total), including the page
+  structures for the Conversation, modern Commits, and legacy Commits
+  views.
+- CI runs on both the minimum supported Node (22) and current (24).
 
 ## [1.1.0] - 2026-06-04
 

@@ -52,7 +52,7 @@
   // name that itself contains a standalone status word (e.g. "error-pages")
   // is still ambiguous — labels are all GitHub's accessible rows give us.
   const FAILING_RE =
-    /\b(fail(?:ed|ing|ure|s)?|error(?:ed|s)?|timed out|cancel(?:l?ed)?|denied|action required)\b/i;
+    /\b(fail(?:ed|ing|ures?|s)?|error(?:ed|s)?|timed out|cancel(?:l?ed)?|denied|action required)\b/i;
   const RUNNING_RE = /\b(in[ _]progress|pending|queued|running|waiting|expected)\b/i;
   const PASSING_RE = /\b(success(?:ful)?|passed|passing)\b/i;
 

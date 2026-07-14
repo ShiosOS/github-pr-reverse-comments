@@ -83,6 +83,7 @@ describe("deriveChecksState", () => {
   it("still matches the real inflected status phrases", () => {
     expect(deriveChecksState(["ci failed after 2m"]).key).toBe("failing");
     expect(deriveChecksState(["ci failure"]).key).toBe("failing");
+    expect(deriveChecksState(["ci 2 failures"]).key).toBe("failing");
     expect(deriveChecksState(["deploy cancelled after 10s"]).key).toBe("failing");
     expect(deriveChecksState(["deploy canceled after 10s"]).key).toBe("failing");
     expect(deriveChecksState(["lint timed out"]).key).toBe("failing");

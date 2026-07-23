@@ -19,7 +19,7 @@
   } else {
     Object.assign(root, factory());
   }
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(globalThis, function () {
   // The whole status-checks/merge box — used as the scroll target. Class
   // names are CSS-module-hashed (`MergeBox-module__mergePartialContainer__x`)
   // so we match on the stable human-readable prefix and fall back through

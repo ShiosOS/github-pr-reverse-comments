@@ -14,12 +14,8 @@
 import { createWriteStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
 import path from "node:path";
-
-// archiver is CommonJS without an ESM default export; require it.
-const require = createRequire(import.meta.url);
-const archiver = require("archiver");
+import { ZipArchive } from "archiver";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -53,7 +49,7 @@ async function collectFiles(manifest) {
 function zipTo(outPath, files) {
   return new Promise((resolve, reject) => {
     const output = createWriteStream(outPath);
-    const archive = archiver("zip", { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
     output.on("close", () => resolve(archive.pointer()));
     archive.on("error", reject);
     archive.pipe(output);

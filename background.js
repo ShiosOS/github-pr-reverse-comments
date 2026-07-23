@@ -29,7 +29,7 @@
     chrome.tabs.onUpdated.addListener(api.handleTabUpdated);
     chrome.tabs.onActivated.addListener(api.handleTabActivated);
   }
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(globalThis, function () {
   const ACTIVE_PATH = { 16: "icon-16.png", 48: "icon-48.png", 128: "icon-128.png" };
   const DISABLED_PATH = {
     16: "icon-16-disabled.png",

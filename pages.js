@@ -22,7 +22,7 @@
     Object.assign(root, factory(r.firstMatchingTarget, r.pushedCommitTargets));
   }
 })(
-  typeof globalThis !== "undefined" ? globalThis : this,
+  globalThis,
   function (
     /** @type {(candidates: { container: string; item: string }[]) => PrrcTarget | null} */
     firstMatchingTarget,

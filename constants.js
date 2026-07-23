@@ -14,7 +14,7 @@
   } else {
     Object.assign(root, factory());
   }
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(globalThis, function () {
   // chrome.storage.local key holding the user's order preference.
   const STORAGE_KEY = "prCommentOrder";
   // Allowed values for that preference.

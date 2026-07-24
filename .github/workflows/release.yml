@@ -1,6 +1,6 @@
 name: Release
 
-# Cut a release by pushing a tag like `v1.1.0` (must match manifest.json).
+# Cut a release by pushing a tag like `v1.2.1` (must match manifest.json).
 on:
   push:
     tags:
@@ -13,9 +13,10 @@ jobs:
   release:
     runs-on: ubuntu-latest
     # Store-publishing credentials. Both publishing steps below are skipped
-    # when their secrets are absent, so the workflow degrades gracefully to
-    # a plain GitHub Release until the secrets are configured
-    # (repo Settings -> Secrets and variables -> Actions):
+    # when their secrets are absent, and continue-on-error so a bad or
+    # expired credential cannot block the GitHub Release (which is what
+    # Chromium / sideload users need). Configure under
+    # repo Settings -> Secrets and variables -> Actions:
     #   AMO_JWT_ISSUER / AMO_JWT_SECRET
     #     addons.mozilla.org -> Tools -> Manage API Keys. Must belong to the
     #     AMO account that owns the gecko id in manifest.json.
@@ -49,6 +50,19 @@ jobs:
 
       - run: npm run build
 
+      # Publish the GitHub Release before store signing/upload. v1.2.0's
+      # release never appeared because AMO signing failed first with a bad
+      # JWT issuer, so the zip with the packaging fix never shipped.
+      - name: Create GitHub Release with build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            github-pr-reverse-comments.zip \
+            github-pr-reverse-comments-*.xpi \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
+
       # Sign the .xpi with Mozilla so Firefox installs it permanently.
       # `unlisted` is the self-distribution channel (installed by dragging
       # the .xpi into Firefox, as the README describes) — switch to
@@ -58,6 +72,8 @@ jobs:
       # version twice, so re-running this workflow for an existing tag will
       # fail here — bump the version instead.
       - name: Sign the Firefox .xpi with Mozilla (AMO)
+        id: amo_sign
+        continue-on-error: true
         if: env.AMO_JWT_ISSUER != '' && env.AMO_JWT_SECRET != ''
         run: |
           version="$(node -p "require('./manifest.json').version")"
@@ -72,9 +88,20 @@ jobs:
           # Ship the signed file under the same name the Release step uploads.
           mv /tmp/xpi-signed/*.xpi "github-pr-reverse-comments-${version}.xpi"
 
+      - name: Upload signed Firefox .xpi to the GitHub Release
+        if: steps.amo_sign.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p "require('./manifest.json').version")"
+          gh release upload "$GITHUB_REF_NAME" \
+            "github-pr-reverse-comments-${version}.xpi" \
+            --clobber
+
       # Upload the .zip to the Chrome Web Store and publish. Google's
       # review still happens asynchronously on their side afterwards.
       - name: Publish to the Chrome Web Store
+        continue-on-error: true
         if: >-
           env.CWS_EXTENSION_ID != '' && env.CWS_CLIENT_ID != '' &&
           env.CWS_CLIENT_SECRET != '' && env.CWS_REFRESH_TOKEN != ''
@@ -87,13 +114,3 @@ jobs:
           npx chrome-webstore-upload-cli@3 upload \
             --source github-pr-reverse-comments.zip \
             --auto-publish
-
-      - name: Create GitHub Release with build artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" \
-            github-pr-reverse-comments.zip \
-            github-pr-reverse-comments-*.xpi \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes

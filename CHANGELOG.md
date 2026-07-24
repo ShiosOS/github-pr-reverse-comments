@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-24
+
+### Fixed
+
+- The release workflow now creates the GitHub Release (with `.zip` / `.xpi`)
+  before attempting AMO signing or Chrome Web Store publish, and store steps
+  no longer fail the job. v1.2.0 never shipped because invalid AMO JWT
+  credentials aborted the workflow before the release was created — leaving
+  the broken v1.1.0 package (missing `checks.js`) as latest.
+- Status-check labels that use the plural form `failures` are now recognized
+  as failing (same word-boundary matching as the other status phrases).
+
 ## [1.2.0] - 2026-07-14
 
 ### Fixed
@@ -71,7 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   day), including the modern React-rendered Commits page.
 - Firefox support (Manifest V3, signed `.xpi`).
 
-[Unreleased]: https://github.com/ShiosOS/github-pr-reverse-comments/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/ShiosOS/github-pr-reverse-comments/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/ShiosOS/github-pr-reverse-comments/releases/tag/v1.2.1
 [1.2.0]: https://github.com/ShiosOS/github-pr-reverse-comments/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ShiosOS/github-pr-reverse-comments/releases/tag/v1.1.0
 [1.0.6]: https://github.com/ShiosOS/github-pr-reverse-comments/releases/tag/v1.0.6

@@ -23,12 +23,13 @@ Works in **Chrome**, **Edge**, **Brave**, any other Chromium browser, and
 
 ### Chrome / Edge / Brave (any Chromium browser)
 
-1. Download this repository — either `git clone` it or click the green
-   **Code** button on GitHub and **Download ZIP**, then unzip it somewhere
+1. Download `github-pr-reverse-comments.zip` from the
+   [latest release](https://github.com/ShiosOS/github-pr-reverse-comments/releases/latest)
+   (or `git clone` / GitHub **Code → Download ZIP**), then unzip it somewhere
    permanent (the browser keeps reading the files from disk).
 2. Open `chrome://extensions` (or `edge://extensions`, `brave://extensions`).
 3. Toggle **Developer mode** on in the top-right corner.
-4. Click **Load unpacked** and select the `github-pr-reverse-comments` folder.
+4. Click **Load unpacked** and select the unzipped folder.
 5. Open any GitHub Pull Request — you should see a blue **↓ Newest first**
    button in the bottom-right corner, and the newest comment will be at the
    top of the timeline.
@@ -49,7 +50,7 @@ The extension works until you close Firefox.
 #### Permanent: install the signed `.xpi` from the Releases page
 
 1. Go to the [latest release](https://github.com/ShiosOS/github-pr-reverse-comments/releases/latest).
-2. Download the file ending in `.xpi` (e.g. `github-pr-reverse-comments-1.1.0.xpi`).
+2. Download the file ending in `.xpi` (e.g. `github-pr-reverse-comments-1.2.1.xpi`).
 3. Drag the downloaded `.xpi` into a Firefox window. Firefox will show a
    permission prompt — click **Add** to install it permanently.
 

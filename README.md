@@ -89,6 +89,8 @@ The full list of permissions:
 - **access to github.com pull request pages** — to read and re-order the
   comments visible in the tab. It does not read any other tabs.
 
+Full details in [PRIVACY.md](PRIVACY.md).
+
 ---
 
 ## Troubleshooting

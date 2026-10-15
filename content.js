@@ -23,6 +23,7 @@
 
   /** @type {PrrcOrder} */
   let currentOrder = ORDER.NEWEST;
+  let initialized = false;
   const bodyObserver = new MutationObserver(scheduleRebindIfNeeded);
 
   function getCurrentPageConfig() {
@@ -181,7 +182,9 @@
   // the new one isn't sorted yet).
   let rebindScheduled = false;
   function scheduleRebindIfNeeded() {
-    if (rebindScheduled) return;
+    // GitHub can dispatch navigation events while storage is still loading.
+    // Render only after the saved preference is known.
+    if (!initialized || rebindScheduled) return;
     rebindScheduled = true;
     queueMicrotask(() => {
       rebindScheduled = false;
@@ -229,6 +232,7 @@
       currentOrder = normalizeOrder(stored[STORAGE_KEY]);
     }
 
+    initialized = true;
     startBodyWatcher();
     if (onSupportedPage()) {
       injectToggleButton();

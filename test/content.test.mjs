@@ -14,7 +14,7 @@ afterEach(() => {
 });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
-async function openPage(html) {
+async function openPage(html, { stored = {}, beforeRead = () => {} } = {}) {
   dom = new JSDOM(html, { url: "https://github.com/o/r/pull/1", runScripts: "outside-only" });
   const { window } = dom;
   const NativeObserver = window.MutationObserver;
@@ -24,11 +24,14 @@ async function openPage(html) {
       observers.push(this);
     }
   };
-  const values = { prrcDefaultResetVersion: 1 };
+  const values = { prrcDefaultResetVersion: 1, ...stored };
   window.chrome = {
     storage: {
       local: {
-        get: async () => ({ ...values }),
+        get: async () => {
+          await beforeRead(window);
+          return { ...values };
+        },
         set: async (next) => Object.assign(values, next),
         remove: async (key) => delete values[key],
       },
@@ -116,5 +119,27 @@ describe("content script lifecycle", () => {
     observer.observe(window.document.body, { subtree: true, childList: true, attributes: true });
     await settle();
     expect(changes).toBe(0);
+  });
+  it("waits for the saved preference before handling early navigation events", async () => {
+    const window = await openPage(
+      `<div class="js-discussion">
+      <div class="js-timeline-item" id="a"></div><div class="js-timeline-item" id="b"></div>
+    </div>`,
+      {
+        stored: { prCommentOrder: "oldest" },
+        beforeRead: async (window) => {
+          await Promise.resolve();
+          window.document.dispatchEvent(new window.Event("turbo:load"));
+          await settle();
+        },
+      },
+    );
+    await settle();
+    const button = window.document.getElementById("pr-reverse-comments-toggle");
+    expect(button.textContent).toBe("↑ Oldest first");
+    expect(ids(window.document.querySelector(".js-discussion"))).toEqual(["a", "b"]);
+    button.click();
+    expect(button.textContent).toBe("↓ Newest first");
+    expect(ids(window.document.querySelector(".js-discussion"))).toEqual(["b", "a"]);
   });
 });

@@ -23,11 +23,7 @@
 
   /** @type {PrrcOrder} */
   let currentOrder = ORDER.NEWEST;
-  let isSorting = false;
-  /** @type {MutationObserver[]} */
-  let observers = [];
-  /** @type {PrrcTarget[]} */
-  let activeTargets = []; // [{ el, item, ... }]
+  const bodyObserver = new MutationObserver(scheduleRebindIfNeeded);
 
   function getCurrentPageConfig() {
     return getPageConfig(location.pathname);
@@ -42,48 +38,13 @@
     const cfg = getCurrentPageConfig();
     if (!cfg) return;
 
-    const targets = cfg.getTargets();
-    if (!targets.length) return;
-
-    activeTargets = targets;
-
-    isSorting = true;
+    // Disconnect synchronously instead of suppressing callbacks until a timer
+    // fires: GitHub can insert real updates during that same event-loop turn.
+    bodyObserver.disconnect();
     try {
-      for (const t of targets) applyOrderToTarget(t, order);
+      for (const target of cfg.getTargets()) applyOrderToTarget(target, order);
     } finally {
-      setTimeout(() => {
-        isSorting = false;
-      }, 0);
-    }
-  }
-
-  function disconnectObservers() {
-    for (const o of observers) o.disconnect();
-    observers = [];
-  }
-
-  function startObservers() {
-    disconnectObservers();
-    if (!activeTargets.length) return;
-
-    for (const target of activeTargets) {
-      const watch = target.descendant
-        ? target.el.querySelector(target.item)?.parentElement || target.el
-        : target.el;
-
-      const obs = new MutationObserver((mutations) => {
-        if (isSorting) return;
-        const structural = mutations.some(
-          (m) => m.type === "childList" && (m.addedNodes.length || m.removedNodes.length),
-        );
-        if (!structural) return;
-
-        disconnectObservers();
-        applyOrder(currentOrder);
-        startObservers();
-      });
-      obs.observe(watch, { childList: true });
-      observers.push(obs);
+      startBodyWatcher();
     }
   }
 
@@ -225,49 +186,32 @@
     queueMicrotask(() => {
       rebindScheduled = false;
 
-      // Off a supported page — tear down everything we put up.
-      if (!onSupportedPage()) {
-        const btn = document.getElementById(BUTTON_ID);
-        if (btn) btn.remove();
-        const checks = document.getElementById(CHECKS_STATUS_ID);
-        if (checks) checks.remove();
-        disconnectObservers();
-        activeTargets = [];
-        return;
-      }
-
-      if (!document.getElementById(BUTTON_ID)) {
+      // One subtree observer owns both target discovery and updates. Reconcile
+      // existing targets too: their children can change without the outer
+      // container being replaced (pagination, lazy batches, and React renders).
+      bodyObserver.disconnect();
+      try {
+        if (!onSupportedPage()) {
+          document.getElementById(BUTTON_ID)?.remove();
+          document.getElementById(CHECKS_STATUS_ID)?.remove();
+          return;
+        }
         injectToggleButton();
+        injectOrUpdateChecksIndicator();
+        const cfg = getCurrentPageConfig();
+        if (cfg) {
+          for (const target of cfg.getTargets()) applyOrderToTarget(target, currentOrder);
+        }
+      } finally {
+        startBodyWatcher();
       }
-      injectOrUpdateChecksIndicator();
-
-      const cfg = getCurrentPageConfig();
-      if (!cfg) return;
-      const freshTargets = cfg.getTargets();
-      if (!freshTargets.length) return;
-
-      // Compare the new target set to the active one by element identity.
-      // If every element matches an active target's element, nothing to do.
-      const activeEls = new Set(activeTargets.map((t) => t.el));
-      const sameSet =
-        freshTargets.length === activeTargets.length &&
-        freshTargets.every((t) => activeEls.has(t.el));
-
-      if (sameSet) return;
-
-      activeTargets = [];
-      applyOrder(currentOrder);
-      startObservers();
     });
   }
 
   function startBodyWatcher() {
-    const bodyObs = new MutationObserver(scheduleRebindIfNeeded);
-    // aria-label is watched because GitHub updates a check row's label in
-    // place (e.g. "in progress" -> "successful") without any structural
-    // mutation; without it the checks indicator would go stale until some
-    // unrelated DOM churn happened to fire the observer.
-    bodyObs.observe(document.body, {
+    // Pausing during our own writes prevents feedback loops, while watching
+    // the full subtree catches updates inside retained timeline containers.
+    bodyObserver.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
@@ -304,7 +248,6 @@
   // safety net; these just shave latency when the events arrive.
   ["turbo:render", "turbo:load", "pjax:end", "soft-nav:end"].forEach((evt) => {
     document.addEventListener(evt, () => {
-      activeTargets = [];
       scheduleRebindIfNeeded();
     });
   });
